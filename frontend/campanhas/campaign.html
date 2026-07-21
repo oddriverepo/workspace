@@ -1,0 +1,918 @@
+﻿<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OD Drive - Campanha</title>
+  <link rel="stylesheet" href="./assets/styles.css" />
+  <link rel="stylesheet" href="../assets/custom-widgets.css?v=20260520e" />
+  <script>
+    // CAPTURA IMEDIATA DO TOKEN DA URL ANTES DE QUALQUER SCRIPT CARREGAR
+    (function() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const tokenFromUrl = urlParams.get('token');
+      if (tokenFromUrl) {
+        localStorage.setItem('adminToken', tokenFromUrl);
+        console.log('[AUTH] Token capturado da URL e salvo no localStorage');
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, newUrl);
+      } else {
+        const existingToken = localStorage.getItem('adminToken');
+        console.log('[AUTH] Sem token na URL. Token no localStorage:', existingToken ? 'PRESENTE' : 'AUSENTE');
+      }
+    })();
+  </script>
+  <script src="/assets/config.js"></script>
+  <script>
+    // Warmup: acorda o backend (Render free tier dorme após inatividade)
+    if (window.API_BASE) fetch(window.API_BASE + '/health').catch(function(){});
+  </script>
+</head>
+<body>
+  <div class="topbar">
+    <div class="wrap">
+      <div class="brand">
+        <a href="index.html" class="btn btn--ghost">&larr; Voltar</a>
+        <!-- Imagem à esquerda do título da campanha (opcional) -->
+        <img src="assets/images/udd-student.png" alt="UDD" class="logo-left" />
+        <h1 id="campTitle">Nome da Campanha</h1>
+      </div>
+      <div class="actions">
+        <button type="button" class="cw-add-btn" id="btnAddWidget">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span>Adicionar widget</span>
+          </button>
+        <button class="btn" id="btnReport">Relatório Parcial</button>
+        <button class="btn btn--danger" id="btnDelete">Excluir Campanha</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- Tabs -->
+    <div class="tabs" id="tabs">
+      <button class="tab active" data-tab="resumo">Resumo</button>
+      <button class="tab" data-tab="motoristas">Motoristas</button>
+      <button class="tab" data-tab="grafica">Gráfica</button>
+    <button class="tab" data-tab="acompanhe">Acompanhe</button>
+      <button class="tab" data-tab="km" style="display:none;">KM / Metas</button>
+      <button class="tab" data-tab="revisar">Revisar</button>
+      <button class="tab" data-tab="historico">Histórico</button>
+      <button class="tab" data-tab="config">Configurações</button>
+    </div>
+
+    <div class="tab-panels">
+      <!-- Resumo -->
+      <section class="tab-panel active" id="tab-resumo">
+        <div class="summary-top-row" id="summaryTopRow">
+          <article class="summary-priority priority-attention" id="summaryPriorityAttentionCard">
+            <p class="small m0">Em atenção</p>
+            <p class="summary-priority-value m0" id="summaryPriorityAttention">0</p>
+            <p class="small muted m0">Monitorar na semana</p>
+            <div class="summary-attention-popover" id="summaryAttentionPopover" role="tooltip" aria-hidden="true">
+              <p class="summary-attention-popover-title m0">Motoristas em atenção</p>
+              <div class="summary-attention-popover-body" id="summaryAttentionPopoverBody">
+                Sem itens de atenção no momento.
+              </div>
+            </div>
+          </article>
+          <div class="kpi summary-top-kpi">
+            <div class="label">KM rodado</div>
+            <div class="value" id="kpiKm">-</div>
+          </div>
+          <article class="card summary-km-card summary-km-card-inline">
+            <div class="card-head">
+              <h3 class="m0">Visão de KM da campanha</h3>
+              <span class="pill" id="summaryKmSource">Fonte: API OdDrive</span>
+            </div>
+            <div class="summary-km-progress">
+              <div class="summary-km-progress-head">
+                <span id="summaryKmProgressLabel">0% da meta</span>
+                <span id="summaryKmGapLabel">Faltam 0 KM</span>
+              </div>
+              <div class="summary-progress-track">
+                <div class="summary-progress-fill" id="summaryKmProgressFill"></div>
+              </div>
+            </div>
+            <p class="small muted m0" id="summaryKmRuleLabel">Meta atual: 100 KM por motorista no período.</p>
+          </article>
+        </div>
+
+        <div class="summary-two-col" id="summaryTwoCol">
+          <div class="summary-two-col-left">
+            <div class="grid-cards summary-main-grid">
+              <article class="card">
+                <div class="card-head">
+                  <h3 class="m0">Status da campanha</h3>
+                  <div class="card-head-actions">
+                    <button type="button" class="btn btn--ghost btn-mini" id="btnSetDriverTarget" title="Definir meta de motoristas">Meta: <span id="driverTargetLabel">—</span></button>
+                    <select id="campaignStatus" class="pill-select"></select>
+                  </div>
+                </div>
+                <p class="camp-detail">Período: <span id="campPeriod">-</span></p>
+                <p class="camp-detail" id="campLocationLine" style="display:none;"><span id="campLocation">-</span></p>
+                <p class="camp-detail" id="campDescriptionLine" style="display:none;"><span id="campDescription">-</span></p>
+                <p class="camp-detail" id="campValueLine" style="display:none;">Valor mensal: <b id="campMonthlyValue">-</b> · Meta: <b id="campMetaKms">-</b> km</p>
+                <div class="counts">
+                  <div class="count">Agendado: <b id="cAg">0</b></div>
+                  <div class="count">Confirmado: <b id="cCf">0</b></div>
+                  <div class="count">Instalado: <b id="cIn">0</b></div>
+                  <div class="count">Problema: <b id="cPb">0</b></div>
+                  <div class="count">Revisar: <b id="cRv">0</b></div>
+                </div>
+                <div class="dispatch-bar" id="dispatchBar" style="display:none">
+                  <button type="button" class="btn btn--dispatch" id="btnDispatchAll">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/></svg>
+                    Notificar motoristas em atenção
+                    <span class="dispatch-count-badge" id="dispatchCount">0</span>
+                  </button>
+                </div>
+              </article>
+              <article class="card" id="schedulingStatusCard">
+                <div class="card-head">
+                  <h3 class="m0">Agendamentos</h3>
+                  <span class="pill" id="schedulingStatusBadge">0 / 0</span>
+                </div>
+                <div class="sched-status-cols">
+                  <div class="sched-status-col">
+                    <h4 class="sched-col-title sched-col-title--ok">✅ Agendados <span id="schedCountOk">0</span></h4>
+                    <ul class="sched-driver-list" id="schedListOk"></ul>
+                  </div>
+                  <div class="sched-status-col">
+                    <h4 class="sched-col-title sched-col-title--pending">⏳ Pendentes <span id="schedCountPending">0</span></h4>
+                    <ul class="sched-driver-list" id="schedListPending"></ul>
+                  </div>
+                </div>
+                <div class="sched-dispatch-bar" id="schedDispatchBar" style="display:none">
+                  <button type="button" class="btn btn--dispatch btn--dispatch-sched" id="btnDispatchSchedule">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/></svg>
+                    Notificar motoristas pendentes
+                    <span class="dispatch-count-badge" id="schedDispatchCount">0</span>
+                  </button>
+                </div>
+              </article>
+            </div>
+          </div>
+          <div class="summary-two-col-right">
+            <article class="card summary-actions-unified">
+              <div class="card-head">
+                <h3 class="m0">Central de ações</h3>
+                <span class="pill danger" id="unifiedActionsCount">0</span>
+              </div>
+              <div class="summary-actions-sections">
+                <details class="summary-actions-group" open>
+                  <summary class="summary-actions-group-head">
+                    <span class="summary-actions-group-icon danger">!</span>
+                    Resolver hoje
+                    <span class="pill danger pill-sm" id="kanbanTodayCount">0</span>
+                  </summary>
+                  <ul class="summary-list" id="summaryKanbanToday"></ul>
+                </details>
+                <details class="summary-actions-group" open>
+                  <summary class="summary-actions-group-head">
+                    <span class="summary-actions-group-icon warn">⏱</span>
+                    Esta semana
+                    <span class="pill warn pill-sm" id="kanbanWeekCount">0</span>
+                  </summary>
+                  <ul class="summary-list" id="summaryKanbanWeek"></ul>
+                </details>
+                <details class="summary-actions-group">
+                  <summary class="summary-actions-group-head">
+                    <span class="summary-actions-group-icon success">✓</span>
+                    Acompanhando
+                    <span class="pill success pill-sm" id="kanbanWatchCount">0</span>
+                  </summary>
+                  <ul class="summary-list" id="summaryKanbanWatch"></ul>
+                </details>
+                <details class="summary-actions-group">
+                  <summary class="summary-actions-group-head">
+                    <span class="summary-actions-group-icon danger">⚡</span>
+                    Alertas inteligentes
+                    <span class="pill danger pill-sm" id="smartAlertsCount">0</span>
+                  </summary>
+                  <ul class="summary-list" id="summarySmartAlerts"></ul>
+                </details>
+              </div>
+            </article>
+          </div>
+        </div>
+
+        <div class="grid-cards summary-main-grid summary-rankings-grid" id="summaryRankingsGrid">
+          <article class="card">
+            <div class="card-head">
+              <h3 class="m0">Top 5 em risco</h3>
+              <span class="pill danger">Abaixo da meta</span>
+            </div>
+            <div class="summary-ranking-table">
+              <table class="table">
+                <thead><tr><th>Motorista</th><th>KM</th><th>%</th></tr></thead>
+                <tbody id="summaryWorstDrivers"></tbody>
+              </table>
+            </div>
+          </article>
+          <article class="card">
+            <div class="card-head">
+              <h3 class="m0">Top 5 melhores</h3>
+              <span class="pill success">Acima da meta</span>
+            </div>
+            <div class="summary-ranking-table">
+              <table class="table">
+                <thead><tr><th>Motorista</th><th>KM</th><th>%</th></tr></thead>
+                <tbody id="summaryBestDrivers"></tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+
+        <article class="card" id="summaryInactivityCard" hidden>
+          <div class="card-head">
+            <h3 class="m0">Motoristas inativos</h3>
+            <span class="pill danger" id="summaryInactivityCount">0</span>
+          </div>
+          <p class="small muted m0" id="summaryInactivityHint">Sem uploads de evidência há 7 dias ou mais (carência inicial de 3 dias após o início).</p>
+          <div class="summary-ranking-table">
+            <table class="table" data-empty="Nenhum motorista inativo no momento.">
+              <thead>
+                <tr>
+                  <th>Motorista</th>
+                  <th>Status</th>
+                  <th>Início rodando</th>
+                  <th>Dias inativo</th>
+                  <th>Severidade</th>
+                </tr>
+              </thead>
+              <tbody id="summaryInactivityRows"></tbody>
+            </table>
+          </div>
+          <div class="summary-inactivity-actions">
+            <button type="button" class="btn btn--primary" id="btnInactivityDispatch" disabled>Avisar todos com telefone</button>
+            <button type="button" class="btn" id="btnInactivityRefresh">Atualizar</button>
+          </div>
+        </article>
+
+        <article class="card" id="summaryHeatmapCard" hidden>
+          <div class="card-head">
+            <h3 class="m0">Padrão de envios (dia × hora)</h3>
+            <span class="pill" id="summaryHeatmapTotal">0 uploads</span>
+          </div>
+          <p class="small muted m0" id="summaryHeatmapHint">Concentração de uploads de evidência por dia da semana e hora (fuso America/Sao_Paulo).</p>
+          <div class="heatmap-wrap" id="summaryHeatmapWrap" hidden>
+            <div class="heatmap-grid" id="summaryHeatmapGrid" role="img" aria-label="Mapa de calor de uploads"></div>
+            <div class="heatmap-legend">
+              <span class="muted small">Menos</span>
+              <span class="heatmap-legend-cell" data-level="0"></span>
+              <span class="heatmap-legend-cell" data-level="1"></span>
+              <span class="heatmap-legend-cell" data-level="2"></span>
+              <span class="heatmap-legend-cell" data-level="3"></span>
+              <span class="heatmap-legend-cell" data-level="4"></span>
+              <span class="muted small">Mais</span>
+            </div>
+            <p class="small muted m0" id="summaryHeatmapPeak"></p>
+          </div>
+          <p class="small muted m0" id="summaryHeatmapEmpty">Sem uploads registrados ainda.</p>
+        </article>
+
+        <article class="card" id="summaryKmEditorCard">
+          <div class="card-head">
+            <h3 class="m0">Atualização manual de KM</h3>
+            <span class="pill">Ajuste manual</span>
+          </div>
+          <p class="small muted m0">O KM total vem da API OdDrive. Use este editor apenas para ajustes manuais pontuais.</p>
+          <form id="summaryKmForm" class="form-grid summary-km-form">
+            <div class="form-group">
+              <label for="summaryKmDriver">Motorista</label>
+              <select id="summaryKmDriver"></select>
+            </div>
+            <div class="form-group">
+              <label for="summaryKmInitial">Odômetro na instalação</label>
+              <input id="summaryKmInitial" type="number" min="0" step="1" placeholder="Preenchido do fluxo do motorista" readonly />
+            </div>
+            <div class="form-group">
+              <label for="summaryKmCurrent">KM percorrido na campanha</label>
+              <input id="summaryKmCurrent" type="number" min="0" step="1" placeholder="Ex.: 250" />
+            </div>
+            <div class="form-group summary-km-save-group">
+              <label>&nbsp;</label>
+              <button type="submit" class="btn btn--primary" id="btnSaveSummaryKm">Salvar KM no servidor</button>
+            </div>
+          </form>
+          <p class="small muted m0" id="summaryKmMessage"></p>
+          <div class="summary-ranking-table">
+            <table class="table">
+              <thead><tr><th>Motorista</th><th>KM</th><th>% da meta</th><th>Prioridade</th></tr></thead>
+              <tbody id="summaryRiskDrivers"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <!-- Meus indicadores (widgets customizáveis) -->
+        <div id="campaignCustomWidgetsHost"></div>
+      </section>
+
+      <!-- Motoristas -->
+      <section class="tab-panel" id="tab-motoristas">
+        <div class="tab-toolbar">
+          <div class="toolbar-actions">
+            <button class="btn" id="btnSaveDrivers" disabled>Salvar alterações</button>
+            <button class="btn" id="btnImportDrivers" type="button">Importar planilha</button>
+            <button class="btn" id="btnExportDrivers" type="button" title="Exportar motoristas para Excel ou CSV">Exportar</button>
+            <button class="btn btn--primary" id="btnAddDriver">Adicionar motorista</button>
+          </div>
+          <div class="toolbar-info">
+            <div class="cols-menu" id="driversColsMenu">
+              <button type="button" class="btn" id="btnDriversCols" aria-haspopup="true" aria-expanded="false" title="Mostrar/ocultar colunas">Colunas</button>
+              <div class="cols-menu-panel" id="driversColsPanel" hidden>
+                <p class="small muted m0">Selecione as colunas visíveis:</p>
+                <label class="cols-menu-item"><input type="checkbox" data-col-toggle="city" checked /> Cidade</label>
+                <label class="cols-menu-item"><input type="checkbox" data-col-toggle="status" checked /> Status</label>
+                <label class="cols-menu-item"><input type="checkbox" data-col-toggle="km" checked /> KM total</label>
+                <label class="cols-menu-item"><input type="checkbox" data-col-toggle="odoDriver" checked /> Odômetro motorista</label>
+                <label class="cols-menu-item"><input type="checkbox" data-col-toggle="odoGraphic" checked /> Odômetro gráfica</label>
+                <label class="cols-menu-item"><input type="checkbox" data-col-toggle="odoDistance" checked /> KM por odômetros</label>
+                <label class="cols-menu-item"><input type="checkbox" data-col-toggle="adhesion" checked /> Horário adesivagem</label>
+              </div>
+            </div>
+            <label class="cols-menu-item" style="align-self:center;cursor:pointer;user-select:none;" title="Oculta motoristas com bloqueio de contato ativo">
+              <input type="checkbox" id="chkHideBlocked" /> Ocultar bloqueados
+            </label>
+            <div class="view-toggle-group" id="driversViewToggle">
+              <button class="btn btn--ghost view-toggle-btn is-active" data-view="table" title="Visualização em tabela">Tabela</button>
+              <button class="btn btn--ghost view-toggle-btn" data-view="pipeline" title="Visualização Kanban / Pipeline">Pipeline</button>
+            </div>
+          </div>
+        </div>
+        <input id="importDriversFile" type="file" accept=".xlsx,.xls" style="display:none;" />
+
+        <!-- Barra de status rápido -->
+        <div class="drivers-status-bar" id="driversStatusBar"></div>
+
+        <!-- Visualização: Tabela -->
+        <div id="driversTableView">
+          <table class="table" id="driversTable" data-empty="Sem motoristas para esta campanha.">
+            <thead>
+              <tr>
+                <th rowspan="2" data-col="name">Nome</th>
+                <th rowspan="2" data-col="city">Cidade</th>
+                <th rowspan="2" data-col="status">Status</th>
+                <th rowspan="2" data-col="km">KM total</th>
+                <th rowspan="2" data-col="odoDriver">Odômetro motorista</th>
+                <th rowspan="2" data-col="odoGraphic">Odômetro gráfica</th>
+                <th rowspan="2" data-col="odoDistance" title="Odômetro mais recente do motorista menos o odômetro inicial informado pela gráfica">KM por odômetros</th>
+                <th colspan="2" class="table-group-head" data-col="adhesion">Horário adesivagem</th>
+                <th rowspan="2" data-col="actions">Ações</th>
+                <th rowspan="2" data-col="block">Bloquear</th>
+              </tr>
+              <tr>
+                <th data-col="adhesionStart">Início</th>
+                <th data-col="adhesionEnd">Retirada</th>
+              </tr>
+            </thead>
+            <tbody id="tblDrivers">
+              <!-- preenchido via JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Visualização: Pipeline / Kanban -->
+        <div id="driversPipelineView" class="drivers-pipeline" style="display:none;"></div>
+      </section>
+
+      <!-- Gráfica -->
+      <section class="tab-panel" id="tab-grafica">
+        <div class="tab-toolbar">
+          <div class="toolbar-actions">
+            <button class="btn btn--primary" id="btnAddGraphic">Adicionar gráfica</button>
+          </div>
+          <div class="toolbar-info">
+            <span class="pill" id="graphicCountBadge">0 gráficas</span>
+          </div>
+        </div>
+        <article class="card" id="graphicAccessCard">
+          <div class="card-head">
+            <h3 class="m0">Acesso da gráfica</h3>
+          </div>
+          <p class="small" id="graphicAccessHint">Compartilhe com a gráfica o nome do responsável cadastrado e o código abaixo. Esses dois campos são usados para acessar a área da gráfica.</p>
+          <div class="code-display">
+            <span class="code-chip" id="campaignCodeValue">---</span>
+            <button class="btn btn--ghost" type="button" id="btnCopyCampaignCode">Copiar código</button>
+          </div>
+          <p class="small muted" id="copyCampaignCodeMessage"></p>
+        </article>
+        <table class="table" data-empty="Nenhuma gráfica cadastrada.">
+          <thead>
+            <tr>
+              <th>Gráfica</th>
+              <th>Email</th>
+              <th>Telefone</th>
+              <th>Responsável 1</th>
+              <th>Responsável 2</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="tblGraphics"></tbody>
+        </table>
+        <p class="small muted">Os dados cadastrados abaixo definem quem pode confirmar o acesso usando o nome do responsável combinado com o código.</p>
+      </section>
+
+      <!-- Modal: Agenda da Gráfica (Scheduling) -->
+      <dialog id="graphicScheduleModal" class="schedule-dialog">
+        <form method="dialog" class="modal-content">
+          <header class="modal-head">
+            <h3 id="scheduleModalTitle">Agenda da Gráfica</h3>
+            <button type="button" class="modal-close" id="scheduleModalClose">&times;</button>
+          </header>
+
+          <div class="modal-body schedule-modal-body">
+            <div class="schedule-main-grid">
+              <section class="schedule-left-col">
+                <!-- Config form  -->
+                <details open class="schedule-config-section">
+                  <summary class="schedule-config-summary">Configurar novo bloco de horários</summary>
+                  <div class="schedule-form-grid">
+                    <label class="field">
+                      <span class="field-label">Tipo</span>
+                      <select id="scheduleType" class="input">
+                        <option value="installation">Instalação (Adesivagem)</option>
+                        <option value="removal">Retirada (Remoção do adesivo)</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span class="field-label">Duração de cada horário</span>
+                      <select id="scheduleSlotDuration" class="input">
+                        <option value="10">10 minutos</option>
+                        <option value="15">15 minutos</option>
+                        <option value="20">20 minutos</option>
+                        <option value="30">30 minutos</option>
+                        <option value="60" selected>1 hora</option>
+                        <option value="90">1h30</option>
+                        <option value="120">2 horas</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span class="field-label">Data início</span>
+                      <input type="date" id="scheduleDateStart" class="input" required>
+                    </label>
+                    <label class="field">
+                      <span class="field-label">Data fim</span>
+                      <input type="date" id="scheduleDateEnd" class="input" required>
+                    </label>
+                  </div>
+
+                  <div class="schedule-ranges-wrap">
+                    <span class="field-label">Faixas de horário</span>
+                    <div id="scheduleTimeRanges" class="schedule-time-ranges">
+                      <div class="schedule-time-range">
+                        <input type="time" class="input range-start" value="08:00">
+                        <span class="schedule-range-separator">até</span>
+                        <input type="time" class="input range-end" value="12:00">
+                        <button type="button" class="btn btn--small btn--danger schedule-remove-range" title="Remover faixa">&times;</button>
+                      </div>
+                    </div>
+                    <button type="button" class="btn btn--small" id="scheduleAddRange">+ Adicionar faixa</button>
+                  </div>
+
+                  <div class="schedule-generate-row">
+                    <button type="button" class="btn btn--primary" id="scheduleGenerateSlots">Gerar horários</button>
+                    <span id="scheduleGenerateStatus" class="small muted"></span>
+                    <button type="button" class="btn btn--dispatch btn--dispatch-sched" id="btnNotifyScheduleCreated" style="display:none" title="Notificar motoristas que novos horários estão disponíveis">
+                      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/></svg>
+                      Notificar motoristas
+                    </button>
+                  </div>
+                </details>
+
+                <!-- Existing configs -->
+                <h4 class="schedule-block-title">Blocos configurados</h4>
+                <div id="scheduleConfigsList" class="schedule-configs-list"></div>
+
+                <!-- Calendar view controls -->
+                <h4 class="schedule-block-title">Visão dos horários</h4>
+                <div class="schedule-view-toolbar">
+                  <div class="schedule-view-filters">
+                    <label class="field schedule-field--compact">
+                      <span class="field-label">Tipo</span>
+                      <select id="scheduleViewType" class="input">
+                        <option value="installation">Instalação</option>
+                        <option value="removal">Retirada</option>
+                      </select>
+                    </label>
+                    <label class="field schedule-field--compact">
+                      <span class="field-label">Data</span>
+                      <input type="date" id="scheduleViewDate" class="input">
+                    </label>
+                  </div>
+                  <div class="schedule-view-actions">
+                    <label class="schedule-toggle-all">
+                      <input type="checkbox" id="scheduleViewAllDates">
+                      <span>Ver período completo</span>
+                    </label>
+                    <button type="button" class="btn btn--small" id="scheduleViewRefresh">Atualizar</button>
+                  </div>
+                </div>
+              </section>
+
+              <aside class="schedule-right-col">
+                <h4 class="schedule-block-title schedule-right-title">Horários do período</h4>
+                <div id="scheduleSlotsMeta" class="schedule-slots-meta"></div>
+                <div id="scheduleSlotsGrid" class="schedule-slots-grid"></div>
+              </aside>
+            </div>
+          </div>
+
+          <footer class="modal-foot">
+            <button type="button" class="btn" id="scheduleModalDone">Fechar</button>
+          </footer>
+        </form>
+      </dialog>
+
+      <!-- Acompanhe (Admin monitoring) -->
+      <section class="tab-panel" id="tab-acompanhe">
+        <div class="acompanhe-mode-toggle">
+          <button class="acompanhe-mode-btn active" data-mode="driver">Motorista</button>
+          <button class="acompanhe-mode-btn" data-mode="graphic">Gr&aacute;fica</button>
+        </div>
+
+        <div class="acompanhe-grid">
+          <aside id="acompanhe-list" class="acompanhe-sidebar">
+            <div class="acompanhe-sidebar-head">
+              <h3 class="m0">Motoristas</h3>
+              <button id="btnCleanupOrphaned" class="btn btn--secondary" style="font-size:12px;padding:4px 8px;" title="Limpar evid&ecirc;ncias &oacute;rf&atilde;s (com arquivos deletados)">Limpar</button>
+            </div>
+            <ul id="acompanheDrivers" class="compact-list">
+              <!-- preenchido via JS -->
+            </ul>
+          </aside>
+
+          <section class="acompanhe-gallery-panel" id="acompanhe-gallery">
+            <h3 class="m0">Galeria</h3>
+            <div id="acompanheGalleryGrid" class="gallery-grid">
+              <!-- thumbnails via JS -->
+            </div>
+            <div id="acompanheStatusPanel" class="acompanhe-status">
+              <p class="small muted" id="acompanheStatusHint">Selecione um motorista para visualizar os arquivos enviados pelo motorista.</p>
+              <div class="status-card" data-role="driver">
+                <div class="status-info">
+                  <p class="status-label">Motorista</p>
+                  <div class="status-chip is-pending" id="driverStatusChip">Sem dados</div>
+                  <p class="status-note small muted" id="driverStatusNote"></p>
+                </div>
+                <div class="status-action">
+                  <button class="btn btn--ghost" id="btnVerifyDriver" disabled>Marcar como verificado</button>
+                </div>
+              </div>
+              <div class="status-card" data-role="graphic">
+                <div class="status-info">
+                  <p class="status-label">Gr&aacute;fica</p>
+                  <div class="status-chip is-pending" id="graphicStatusChip">Sem dados</div>
+                  <p class="status-note small muted" id="graphicStatusNote"></p>
+                </div>
+                <div class="status-action">
+                  <button class="btn btn--ghost" id="btnVerifyGraphic" disabled>Marcar como verificado</button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <!-- KM / Metas -->
+      <section class="tab-panel" id="tab-km" style="display:none;">
+        <div class="tab-toolbar">
+          <div class="toolbar-actions">
+              <button class="btn btn--primary" id="btnImportKm">Importar KM</button>
+              <button class="btn" id="btnSyncKm">Sincronizar KM</button>
+              <button class="btn" id="btnSaveKm" disabled>Salvar KM</button>
+              <label style="display:flex;align-items:center;gap:8px;margin-left:8px;">
+                <span class="small muted">Períodos</span>
+                <input id="kmPeriodsInput" type="number" min="1" max="12" value="3" style="width:64px;padding:6px 8px;border-radius:8px;border:1px solid var(--line);" />
+              </label>
+            </div>
+        </div>
+  <table class="table" data-empty="Sem dados de KM importados.">
+          <thead>
+            <tr>
+              <th>Nome</th><th>Período</th><th>KM Rodado</th><th>Meta</th><th>%</th><th>Status</th><th>Check-in</th><th>Observações</th>
+            </tr>
+          </thead>
+          <tbody id="tblKm">
+            <!-- preenchido via JS -->
+          </tbody>
+        </table>
+      </section>
+
+      <!-- Revisar -->
+      <section class="tab-panel" id="tab-revisar">
+        <table class="table" data-empty="Nenhum item em Revisar.">
+          <thead><tr><th>Tipo</th><th>Descrição</th><th>Ação</th></tr></thead>
+          <tbody id="tblReview">
+            <!-- preenchido via JS -->
+          </tbody>
+        </table>
+      </section>
+
+      <!-- Historico / Timeline -->
+      <section class="tab-panel" id="tab-historico">
+        <article class="card">
+          <div class="card-head">
+            <h3 class="m0">Histórico da campanha</h3>
+            <span class="pill" id="historyTotalPill" hidden>0 eventos</span>
+          </div>
+          <p class="small muted m0">Linha do tempo de ações e eventos relacionados a esta campanha (mais recentes primeiro).</p>
+          <div class="history-toolbar">
+            <button type="button" class="btn" id="btnHistoryRefresh">Atualizar</button>
+          </div>
+          <ol class="history-timeline" id="historyTimeline" aria-live="polite"></ol>
+          <p class="small muted" id="historyEmpty" hidden>Nenhum evento registrado ainda.</p>
+          <p class="small muted" id="historyError" hidden></p>
+          <div class="history-footer">
+            <button type="button" class="btn" id="btnHistoryLoadMore" hidden>Carregar mais</button>
+            <span class="small muted" id="historyLoading" hidden>Carregando...</span>
+          </div>
+        </article>
+      </section>
+
+      <!-- Configuracoes -->
+      <section class="tab-panel" id="tab-config">
+        <p class="small" id="configInfo">IDs / links de planilhas, agenda de sincronização e permissões aparecerão aqui.</p>
+        <div class="campaign-config-layout">
+          <div class="card campaign-config-card">
+            <div class="card-head">
+              <h3 class="m0">Reenvio (cooldown)</h3>
+            </div>
+            <p class="small muted">Defina em quantos dias o motorista/gráfica pode reenviar após ser marcado como verificado.</p>
+            <div class="form-grid campaign-config-fields">
+              <div class="form-group">
+                <label for="cooldownDriver">Dias para motorista</label>
+                <input id="cooldownDriver" type="number" min="0" max="365" value="10" />
+              </div>
+              <div class="form-group">
+                <label for="cooldownGraphic">Dias para gráfica</label>
+                <input id="cooldownGraphic" type="number" min="0" max="365" value="10" />
+              </div>
+            </div>
+            <div class="form-actions campaign-config-actions">
+              <button class="btn btn--primary" id="btnSaveCooldown">Salvar</button>
+            </div>
+            <p class="small muted" id="cooldownMessage"></p>
+          </div>
+
+          <div class="card campaign-config-card">
+            <div class="card-head">
+              <h3 class="m0">Pontuacao de motoristas</h3>
+            </div>
+            <p class="small muted">Janela de tempo (em dias a partir do inicio da campanha) considerada para contar evidencias enviadas no calculo da pontuacao.</p>
+            <div class="form-grid campaign-config-fields">
+              <div class="form-group">
+                <label for="evidenceWindowDays">Janela de evidencias (dias)</label>
+                <input id="evidenceWindowDays" type="number" min="1" max="365" value="30" />
+              </div>
+            </div>
+            <div class="form-actions campaign-config-actions">
+              <button class="btn btn--primary" id="btnSaveEvidenceWindow">Salvar</button>
+            </div>
+            <p class="small muted" id="evidenceWindowMessage"></p>
+          </div>
+
+
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="driverBlockModal" aria-hidden="true">
+    <div class="modal-backdrop" data-modal-dismiss></div>
+    <div class="modal-card modal-card--prompt" style="width:min(440px,92vw)">
+      <button class="modal-close" type="button" data-modal-dismiss>&times;</button>
+      <h2 class="modal-title" id="driverBlockModalTitle" style="font-size:18px;margin-bottom:4px;">Bloquear motorista?</h2>
+      <div id="driverBlockReasonGroup" class="prompt-fields">
+        <div class="form-group">
+          <label for="driverBlockReasonInput">Motivo <span class="small muted">(opcional)</span></label>
+          <textarea id="driverBlockReasonInput" class="driver-input" rows="3" placeholder="Ex: Motorista solicitou não ser contatado" style="width:100%;resize:vertical;"></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn--ghost" data-modal-dismiss>Cancelar</button>
+        <button type="button" class="btn btn--primary" id="btnDriverBlockSave">Confirmar</button>
+      </div>
+      <p class="small text-danger" id="driverBlockModalError" style="margin-top:10px;min-height:18px;"></p>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="driverTargetModal" aria-hidden="true">
+    <div class="modal-backdrop" data-modal-dismiss></div>
+    <div class="modal-card modal-card--prompt" style="width:min(440px,92vw)">
+      <button class="modal-close" type="button" data-modal-dismiss>&times;</button>
+      <h2 class="modal-title" style="font-size:18px;margin-bottom:4px;">Meta de motoristas</h2>
+      <p class="prompt-description" id="driverTargetModalDesc"></p>
+      <div class="prompt-fields">
+        <div class="form-group">
+          <label for="driverTargetModalInput">Quantidade alvo <span class="small muted">(0 = sem meta)</span></label>
+          <input id="driverTargetModalInput" type="number" min="0" max="100000" placeholder="Ex: 50" style="font-size:20px;font-weight:700;letter-spacing:-0.5px;" />
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn--ghost" data-modal-dismiss>Cancelar</button>
+        <button type="button" class="btn btn--primary" id="btnDriverTargetSave">Salvar meta</button>
+      </div>
+      <p class="small text-danger" id="driverTargetModalError" style="margin-top:10px;min-height:18px;"></p>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="driverDetailModal" aria-hidden="true">
+    <div class="modal-backdrop" data-modal-dismiss></div>
+    <div class="modal-card">
+      <button class="modal-close" type="button" data-modal-dismiss>&times;</button>
+      <h2 class="modal-title" id="driverModalTitle">Motorista</h2>
+      <form id="driverDetailForm">
+        <p class="small muted" id="driverDetailHint" style="margin-bottom:12px;display:none"></p>
+        <div class="modal-body">
+          <div id="driverDetailFields"></div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn--send-driver" id="btnSendDriver" title="Enviar mensagem via WhatsApp">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/></svg>
+            Enviar mensagem
+          </button>
+          <button type="button" class="btn" data-modal-dismiss>Cancelar</button>
+          <button type="submit" class="btn btn--primary" id="driverDetailSubmit">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="summaryDrilldownModal" aria-hidden="true">
+    <div class="modal-backdrop" data-modal-dismiss></div>
+    <div class="modal-card">
+      <button class="modal-close" type="button" data-modal-dismiss>&times;</button>
+      <h2 class="modal-title" id="summaryDrilldownTitle">Motoristas relacionados</h2>
+      <p class="small muted" id="summaryDrilldownHint">Clique no motorista para abrir os detalhes.</p>
+      <div class="modal-body">
+        <ul class="summary-drilldown-list" id="summaryDrilldownList"></ul>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn" data-modal-dismiss>Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="driverFormModal" aria-hidden="true">
+    <div class="modal-backdrop" data-modal-dismiss></div>
+    <div class="modal-card">
+      <button class="modal-close" type="button" data-modal-dismiss>&times;</button>
+      <h2 class="modal-title">Adicionar motorista</h2>
+      <form id="driverForm">
+        <p class="small muted" id="driverFormHint">Preencha os campos abaixo para adicionar um motorista a esta campanha.</p>
+        <div class="form-grid" id="driverFormFields"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn" data-modal-dismiss>Cancelar</button>
+          <button type="submit" class="btn btn--primary" id="driverFormSubmit">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="graphicFormModal" aria-hidden="true">
+    <div class="modal-backdrop" data-modal-dismiss></div>
+    <div class="modal-card">
+      <button class="modal-close" type="button" data-modal-dismiss>&times;</button>
+      <h2 class="modal-title" id="graphicModalTitle">Adicionar gráfica</h2>
+      <form id="graphicForm">
+        <input type="hidden" id="graphicIdField" />
+        <p class="small muted" id="graphicFormHint">Defina os dados de contato da gráfica responsável por esta campanha.</p>
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="graphicFieldName">Nome da gráfica</label>
+            <input id="graphicFieldName" name="name" type="text" required />
+          </div>
+          <div class="form-group">
+            <label for="graphicFieldEmail">Email</label>
+            <input id="graphicFieldEmail" name="email" type="email" placeholder="contato@empresa.com" />
+          </div>
+          <div class="form-group">
+            <label for="graphicFieldPhone">Telefone</label>
+            <input id="graphicFieldPhone" name="phone" type="text" placeholder="(00) 0000-0000" />
+          </div>
+          <div class="form-group">
+            <label for="graphicFieldResp1Name">Responsável 1 nome</label>
+            <input id="graphicFieldResp1Name" name="responsible1Name" type="text" required />
+          </div>
+          <div class="form-group">
+            <label for="graphicFieldResp1Phone">Responsável 1 telefone</label>
+            <input id="graphicFieldResp1Phone" name="responsible1Phone" type="text" placeholder="(00) 0000-0000" />
+          </div>
+          <div class="form-group">
+            <label for="graphicFieldResp2Name">Responsável 2 nome</label>
+            <input id="graphicFieldResp2Name" name="responsible2Name" type="text" />
+          </div>
+          <div class="form-group">
+            <label for="graphicFieldResp2Phone">Responsável 2 telefone</label>
+            <input id="graphicFieldResp2Phone" name="responsible2Phone" type="text" placeholder="(00) 0000-0000" />
+          </div>
+          <div class="form-group form-group--full">
+            <label for="graphicFieldNotes">Observações</label>
+            <textarea id="graphicFieldNotes" name="notes" rows="3" placeholder="Instruções adicionais, horários de atendimento, etc."></textarea>
+          </div>
+        </div>
+        <p class="form-message" id="graphicFormMessage"></p>
+        <div class="modal-actions">
+          <button type="button" class="btn" data-modal-dismiss>Cancelar</button>
+          <button type="submit" class="btn btn--primary" id="graphicFormSubmit">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  
+  <!-- KM Import Modal -->
+  <div class="modal hidden" id="importKmModal" aria-hidden="true">
+    <div class="modal-backdrop" data-modal-dismiss></div>
+    <div class="modal-card">
+      <button class="modal-close" type="button" data-modal-dismiss>&times;</button>
+      <h2 class="modal-title">Importar KM</h2>
+      <form id="importKmForm">
+        <p class="small muted" id="importKmHint">Informe o ID da planilha e o nome da aba para importar os dados de KM.</p>
+        <div class="modal-body">
+          <div class="form-grid">
+            <div class="form-group form-group--full">
+              <label for="importKmSheetId">ID da planilha (Google Sheets)</label>
+              <input id="importKmSheetId" name="spreadsheetId" type="text" autocomplete="off" required />
+            </div>
+            <div class="form-group form-group--full">
+              <label for="importKmSheetName">Nome da aba</label>
+              <input id="importKmSheetName" name="sheetName" type="text" autocomplete="off" value="Planilha1" />
+            </div>
+          </div>
+        </div>
+        <p class="form-message" id="importKmMessage"></p>
+        <div class="modal-actions">
+          <button type="button" class="btn" data-modal-dismiss>Cancelar</button>
+          <button type="submit" class="btn btn--primary" id="importKmSubmit">Importar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  
+  <!-- KM Edit Modal -->
+  <div class="modal hidden" id="kmEditModal" aria-hidden="true">
+    <div class="modal-backdrop" data-modal-dismiss></div>
+    <div class="modal-card">
+      <button class="modal-close" type="button" data-modal-dismiss>&times;</button>
+      <h2 class="modal-title">Editar KM / Metas</h2>
+      <form id="kmEditForm">
+        <p class="small muted" id="kmEditHint">Edite os campos da linha de KM e salve para atualizar a planilha.</p>
+        <div class="modal-body">
+          <div class="form-grid" id="kmEditFields"></div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn" data-modal-dismiss>Cancelar</button>
+          <button type="submit" class="btn btn--primary" id="kmEditSubmit">Salvar KM</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Dispatch Modal -->
+  <div class="modal hidden" id="dispatchModal" aria-hidden="true">
+    <div class="modal-backdrop" data-modal-dismiss></div>
+    <div class="modal-card modal-card--dispatch">
+      <button class="modal-close" type="button" data-modal-dismiss>&times;</button>
+      <h2 class="modal-title">Enviar mensagem</h2>
+      <div class="dispatch-modal-body">
+        <div class="dispatch-mode-tabs">
+          <button type="button" class="dispatch-mode-btn active" data-mode="template">Template aprovado</button>
+          <button type="button" class="dispatch-mode-btn" data-mode="text">Mensagem livre</button>
+        </div>
+        <div class="dispatch-template-section" id="dispatchTemplateSection">
+          <label class="form-label">Template</label>
+          <select id="dispatchTemplateSelect" class="form-input">
+            <option value="">Carregando templates...</option>
+          </select>
+          <div class="dispatch-template-preview" id="dispatchTemplatePreview"></div>
+        </div>
+        <div class="dispatch-text-section hidden" id="dispatchTextSection">
+          <label class="form-label">Mensagem</label>
+          <textarea id="dispatchFreeText" class="form-input" rows="4" placeholder="Digite a mensagem para enviar..."></textarea>
+        </div>
+        <div class="dispatch-drivers-section" id="dispatchDriversSection">
+          <div class="dispatch-drivers-head">
+            <label class="form-label">Destinatários</label>
+            <label class="dispatch-select-all"><input type="checkbox" id="dispatchSelectAll" checked> Selecionar todos</label>
+          </div>
+          <ul class="dispatch-driver-list" id="dispatchDriverList"></ul>
+        </div>
+        <div class="dispatch-result hidden" id="dispatchResult"></div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn" data-modal-dismiss>Cancelar</button>
+        <button type="button" class="btn btn--primary" id="btnDispatchSend">Enviar para <span id="dispatchSelectedCount">0</span> motoristas</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="./js/admin-ui.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+  <script src="../assets/custom-widgets.js?v=20260520d"></script>
+  <script src="./js/campaign.js?v=20260510h"></script>
+</body>
+</html>
+

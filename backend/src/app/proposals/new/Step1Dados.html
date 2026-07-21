@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Novo Orçamento - OD Drive</title>
+  <link rel="stylesheet" href="../../../styles/theme.css">
+  <link rel="stylesheet" href="../../../styles/globals.css">
+  <link rel="stylesheet" href="../../../styles/notifications.css">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: var(--font-family, 'Work Sans', sans-serif);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .wizard-container {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      background: var(--background, #f6f7f8);
+    }
+
+    /* Progress Bar no Topo */
+    .wizard-progress {
+      background: white;
+      border-bottom: 1px solid var(--line, #e3e5e8);
+      padding: 32px 64px 24px;
+    }
+
+    .wizard-logo {
+      width: 160px;
+      height: 42px;
+      background-image: url('../../../../public/brand/logo-dev.png');
+      background-size: contain;
+      background-repeat: no-repeat;
+      background-position: left center;
+      text-indent: -9999px;
+      overflow: hidden;
+      margin-bottom: 32px;
+      display: block;
+    }
+
+    .wizard-steps {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: relative;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .wizard-steps::before {
+      content: '';
+      position: absolute;
+      top: 20px;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: var(--line, #e3e5e8);
+      z-index: 0;
+    }
+
+    .wizard-steps-progress {
+      position: absolute;
+      top: 20px;
+      left: 0;
+      height: 2px;
+      background: var(--primary, #1173d4);
+      z-index: 1;
+      transition: width 0.3s ease;
+    }
+
+    .wizard-step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      position: relative;
+      z-index: 2;
+      cursor: default;
+    }
+
+    .wizard-step-circle {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: white;
+      border: 2px solid var(--line, #e3e5e8);
+      color: var(--text-secondary, #5e6470);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 16px;
+      transition: all 0.3s;
+    }
+
+    .wizard-step.active .wizard-step-circle {
+      background: var(--primary, #1173d4);
+      border-color: var(--primary, #1173d4);
+      color: white;
+      box-shadow: 0 0 0 4px rgba(17, 115, 212, 0.1);
+    }
+
+    .wizard-step.completed .wizard-step-circle {
+      background: var(--primary, #1173d4);
+      border-color: var(--primary, #1173d4);
+      color: white;
+    }
+
+    .wizard-step-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary, #5e6470);
+      text-align: center;
+      max-width: 100px;
+    }
+
+    .wizard-step.active .wizard-step-label {
+      color: var(--primary, #1173d4);
+      font-weight: 600;
+    }
+
+    .wizard-step.completed .wizard-step-label {
+      color: var(--text-primary, #1a1d23);
+    }
+
+    .wizard-main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 32px 120px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .wizard-header {
+      margin-bottom: 28px;
+    }
+
+    .planilha-options {
+      margin-top: 8px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .planilha-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary, #5e6470);
+    }
+
+    .planilha-option {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: white;
+      border: 1px solid var(--line, #e3e5e8);
+      border-radius: 20px;
+      padding: 6px 12px;
+      font-size: 13px;
+      color: var(--text-secondary, #5e6470);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .planilha-option input {
+      margin: 0;
+      cursor: pointer;
+    }
+
+    .planilha-option:hover {
+      border-color: var(--primary, #1173d4);
+    }
+
+    .planilha-option input:checked + span {
+      color: var(--primary, #1173d4);
+      font-weight: 600;
+    }
+
+    .wizard-title {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .wizard-subtitle {
+      font-size: 15px;
+      color: var(--text-secondary, #5e6470);
+    }
+
+    .form-section {
+      background: white;
+      border-radius: 12px;
+      padding: 18px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    }
+
+    /* Grid para dispor os cards lado-a-lado (3 colunas) com largura reduzida por card */
+    .sections-grid {
+      display: grid;
+      grid-template-columns: minmax(260px, 360px) minmax(260px, 360px) minmax(260px, 360px);
+      gap: 16px;
+      align-items: stretch;
+      justify-content: center;
+    }
+
+    /* Em telas pequenas, voltar para coluna única */
+    @media (max-width: 900px) {
+      .sections-grid {
+        grid-template-columns: 1fr;
+      }
+      .wizard-steps {
+        max-width: 720px;
+      }
+      .wizard-main {
+        padding: 16px 18px 100px;
+      }
+    }
+
+    /* Forçar empilhamento vertical dentro de cada card (label acima do input) */
+    .form-grid.stack {
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+
+    /* Ajuste visual para deixar o card mais estreito sem reduzir campos internos */
+    .form-section {
+      width: 100%;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .form-section-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 24px;
+      color: var(--text-primary, #1a1d23);
+    }
+
+    .inline-hint {
+      font-size: 12px;
+      color: var(--text-secondary, #5e6470);
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      align-items: center;
+      flex: 1;
+    }
+
+    .form-grid.single {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .form-label {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-primary, #1a1d23);
+    }
+
+    .form-label.required::after {
+      content: ' *';
+      color: var(--error, #ef4444);
+    }
+
+    .form-input {
+      padding: 10px 12px;
+      border: 1px solid var(--line, #e3e5e8);
+      border-radius: 10px;
+      font-size: 14px;
+      transition: all 0.15s;
+      height: 36px;
+    }
+
+    .form-input:focus {
+      border-color: var(--primary, #1173d4);
+      box-shadow: 0 0 0 3px rgba(17, 115, 212, 0.1);
+      outline: none;
+    }
+
+    .form-input.error {
+      border-color: var(--error, #ef4444);
+    }
+
+    .form-error {
+      font-size: 13px;
+      color: var(--error, #ef4444);
+      display: none;
+    }
+
+    .form-input.error + .form-error {
+      display: block;
+    }
+
+    /* Radio group styles */
+    .radio-group {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .radio-option {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 16px;
+      border: 2px solid var(--line, #e3e5e8);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .radio-option:hover {
+      border-color: var(--primary, #1173d4);
+      background: rgba(17, 115, 212, 0.02);
+    }
+
+    .radio-option input[type="radio"] {
+      width: 20px;
+      height: 20px;
+      margin-top: 2px;
+      cursor: pointer;
+      accent-color: var(--primary, #1173d4);
+    }
+
+    .radio-label {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      flex: 1;
+    }
+
+    .radio-label strong {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary, #1a1d23);
+    }
+
+    .radio-label small {
+      font-size: 13px;
+      color: var(--text-secondary, #5e6470);
+    }
+
+    .radio-option input[type="radio"]:checked + .radio-label strong {
+      color: var(--primary, #1173d4);
+    }
+
+
+    .wizard-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: white;
+      border-top: 1px solid var(--line, #e3e5e8);
+      padding: 12px 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 100;
+    }
+
+    .wizard-actions {
+      display: flex;
+      gap: 12px;
+    }
+
+    .wizard-footer .btn {
+      padding: 10px 18px;
+      font-size: 14px;
+      font-weight: 600;
+      border-radius: 10px;
+      border: none;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .wizard-footer .btn-secondary {
+      background: var(--background, #f6f7f8);
+      color: var(--text-primary, #1a1d23);
+      border: 1px solid var(--line, #e3e5e8);
+    }
+
+    .wizard-footer .btn-secondary:hover {
+      background: var(--line, #e3e5e8);
+      transform: translateY(-1px);
+    }
+
+    .wizard-footer .btn-primary {
+      background: var(--primary, #1173d4);
+      color: white;
+    }
+
+    .wizard-footer .btn-primary:hover {
+      background: var(--primary-dark, #0d5aa8);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(17, 115, 212, 0.3);
+    }
+
+    .wizard-footer .btn:active {
+      transform: translateY(0);
+    }
+  </style>
+</head>
+<body>
+  <div class="wizard-container">
+    <div class="wizard-progress">
+      <div class="wizard-logo">OD DRIVE</div>
+      <div class="wizard-steps">
+        <div class="wizard-steps-progress" style="width: 0%"></div>
+        <div class="wizard-step active">
+          <div class="wizard-step-circle">1</div>
+          <div class="wizard-step-label">Dados</div>
+        </div>
+        <div class="wizard-step">
+          <div class="wizard-step-circle">2</div>
+          <div class="wizard-step-label">Produtos</div>
+        </div>
+        <div class="wizard-step">
+          <div class="wizard-step-circle">3</div>
+          <div class="wizard-step-label">Planilha</div>
+        </div>
+        <div class="wizard-step">
+          <div class="wizard-step-circle">4</div>
+          <div class="wizard-step-label">Uploads</div>
+        </div>
+        <div class="wizard-step">
+          <div class="wizard-step-circle">5</div>
+          <div class="wizard-step-label">Checagem</div>
+        </div>
+        <div class="wizard-step">
+          <div class="wizard-step-circle">6</div>
+          <div class="wizard-step-label">Gerar PDF</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="wizard-main">
+      <div class="wizard-header">
+        <h1 class="wizard-title">Dados do Anunciante</h1>
+        <p class="wizard-subtitle">Preencha as informações básicas da proposta comercial</p>
+        <div class="planilha-options">
+          <span class="planilha-label">Como você deseja incluir a planilha?</span>
+          <label class="planilha-option">
+            <input type="radio" name="tipoPlanilha" value="imagem" checked>
+            <span> Carregar imagem da planilha</span>
+          </label>
+          <label class="planilha-option">
+            <input type="radio" name="tipoPlanilha" value="editar">
+            <span>️ Criar/editar planilha no programa</span>
+          </label>
+        </div>
+      </div>
+
+      <form id="wizard-form">
+        <div class="sections-grid">
+          <div class="form-section">
+            <h3 class="form-section-title">Informações do Cliente</h3>
+            <div class="form-grid stack">
+              <div class="form-group">
+                <label class="form-label required" for="nomeAnunciante">Nome do Anunciante</label>
+                <input type="text" id="nomeAnunciante" class="form-input" placeholder="Ex: Empresa X Ltda" required>
+                <span class="form-error">Campo obrigatório</span>
+              </div>
+              <div class="form-group">
+                <label class="form-label required" for="nomeEmpresa">Nome da Empresa</label>
+                <input type="text" id="nomeEmpresa" class="form-input" placeholder="Ex: X Corp" required>
+                <span class="form-error">Campo obrigatório</span>
+              </div>
+              <div class="form-group">
+                <label class="form-label required" for="pracas">Praças</label>
+                <input type="text" id="pracas" class="form-input" placeholder="Ex: São Paulo, Rio de Janeiro, Belo Horizonte" required>
+                <span class="form-error">Campo obrigatório</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <h3 class="form-section-title">Detalhes Comerciais</h3>
+            <div class="form-grid stack">
+              <div class="form-group">
+                <label class="form-label required" for="pagamento">Forma de Pagamento</label>
+                <input type="text" id="pagamento" class="form-input" placeholder="Ex: Entrada + 2x" required>
+                <span class="form-error">Campo obrigatório</span>
+              </div>
+              <div class="form-group">
+                <label class="form-label required" for="numeroCarros">Número de Carros</label>
+                <input type="number" id="numeroCarros" class="form-input" placeholder="Ex: 10" min="1" required>
+                <span class="form-error">Campo obrigatório</span>
+              </div>
+              <div class="form-group">
+                <label class="form-label required" for="qtdOrcamentos">Quantidade de orçamentos</label>
+                <input type="number" id="qtdOrcamentos" class="form-input" placeholder="1" min="1" max="4" required>
+                <span class="inline-hint">Mínimo 1 e máximo 4; os demais dados são compartilhados entre as opções.</span>
+                <span class="form-error">Campo obrigatório</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <h3 class="form-section-title">Campanha e Datas</h3>
+            <div class="form-grid stack">
+              <div class="form-group">
+                <label class="form-label required" for="dataInicio">Data de Início da Campanha</label>
+                <input type="date" id="dataInicio" class="form-input" required>
+                <span class="form-error">Campo obrigatório</span>
+              </div>
+              <div class="form-group">
+                <label class="form-label required" for="tempoCampanha">Tempo de Campanha (dias)</label>
+                <input type="number" id="tempoCampanha" class="form-input" placeholder="Ex: 30" min="1" required>
+                <span class="form-error">Campo obrigatório</span>
+              </div>
+              <div class="form-group">
+                <label class="form-label required" for="validadeDias">Validade da Proposta (dias)</label>
+                <input type="number" id="validadeDias" class="form-input" placeholder="Ex: 30" min="1" required>
+                <span class="form-error">Informe a validade em dias</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </form>
+    </div>
+
+    <div class="wizard-footer">
+      <button type="button" class="btn btn-secondary" id="btn-back"> Voltar</button>
+      <div class="wizard-actions">
+        <button type="button" class="btn btn-secondary" id="btn-save-draft"> Salvar Rascunho</button>
+        <button type="button" class="btn btn-primary" id="btn-next">Próximo: Produtos </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="../../../shared/web-bridge.js"></script>
+  <script src="../../../lib/notifications.js"></script>
+  <script src="../../../lib/impactMetrics.js"></script>
+  <script src="Step1Dados.js"></script>
+</body>
+</html>

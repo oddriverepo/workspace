@@ -1,0 +1,212 @@
+# ================================================================
+#  render.yaml — OD Drive | Plataforma Unificada
+#  Render.com Infrastructure-as-Code
+#
+#  Serviços:
+#   1. oddrive-backend  → Web Service (Node.js API)
+#   2. oddrive-frontend → Static Site (HTML/CSS/JS puro)
+#
+#  Após o deploy, configure as Environment Variables marcadas
+#  com "sync: false" diretamente no Render Dashboard.
+# ================================================================
+
+services:
+
+  # ============================================================
+  #  BACKEND — API Node.js/Express
+  # ============================================================
+  - type: web
+    name: oddrive-backend
+    env: node
+    rootDir: backend
+    buildCommand: npm ci
+    startCommand: node server/index.js
+    healthCheckPath: /health
+    autoDeploy: true
+
+    envVars:
+      # Ambiente
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "10000"
+
+      # Proxy (obrigatório no Render — fica atrás de load balancer)
+      - key: TRUST_PROXY
+        value: "1"
+      - key: SECRET_ENCRYPTION_KEY
+        sync: false
+
+      # ── MongoDB Atlas ──────────────────────────────────────
+      # Configure no Render Dashboard > Environment > Add Env Var
+      - key: MONGO_URI
+        sync: false
+      - key: MONGO_DB_NAME
+        value: odrive_app
+
+      # ── CORS ──────────────────────────────────────────────
+      # URL do frontend no Render (preencher após criar o site estático)
+      # Exemplo: https://oddrive-frontend.onrender.com
+      - key: FRONTEND_URL
+        value: https://oddrive-frontend.onrender.com
+      - key: CORS_ORIGINS
+        sync: false
+
+      # ── Google OAuth (Gerador de Orçamentos) ──────────────
+      # Opcional — preencher se usar integração Google Sheets/Drive
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        sync: false
+
+      # â”€â”€ CRM / Google Apps Script Web App â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      - key: CRM_APPS_SCRIPT_URL
+        sync: false
+      - key: CRM_APPS_SCRIPT_SECRET
+        sync: false
+      - key: CRM_APPS_SCRIPT_TIMEOUT_MS
+        value: "20000"
+
+      # GPT Maker CRM (leitura de chats e atendimentos; atualizacao sob demanda)
+      - key: GPTMAKER_API_TOKEN
+        sync: false
+      - key: GPTMAKER_WORKSPACE_ID
+        sync: false
+      - key: GPTMAKER_AGENT_ID
+        sync: false
+      - key: GPTMAKER_TIMEOUT_MS
+        value: "20000"
+      - key: GPTMAKER_CACHE_TTL_MS
+        value: "90000"
+      - key: GPTMAKER_PAGE_SIZE
+        value: "100"
+      - key: GPTMAKER_MAX_PAGES
+        value: "50"
+
+      # ── Redis (Sessions) ──────────────────────────────────
+      # Opcional — sem Redis o app usa sessões em memória (fallback)
+      # Se quiser Redis, adicione um Redis service no Render e cole a URL
+      - key: REDIS_URL
+        sync: false
+
+      # ── Limites ───────────────────────────────────────────
+      - key: JSON_BODY_LIMIT
+        value: "10mb"
+      - key: DISABLE_RATE_LIMIT
+        value: "0"
+
+      # ── OdDrive API (legado — REST via JWT) ──────────────
+      # Token fixo ou credenciais para autenticar na API OdDrive
+      - key: ODDRIVE_API_TOKEN
+        sync: false
+      - key: ODDRIVE_API_PASSWORD
+        sync: false
+      - key: ODDRIVE_DEBUG
+        value: "0"
+
+      # ── OdDrive live DB mirror (read-only) ───────────────
+      # ODDRIVE_DB_URI: connection string read-only do cluster da OdDrive
+      - key: ODDRIVE_DB_URI
+        sync: false
+      - key: ODDRIVE_DB_NAME
+        value: ODDrive
+      - key: ODDRIVE_FILIAL_ID
+        sync: false
+      # MIRROR_ENABLED=0 mantém o job desligado até o cutover
+      - key: MIRROR_ENABLED
+        value: "0"
+      - key: MIRROR_INTERVAL_MIN
+        value: "2"
+
+      # ── Meta / WhatsApp Cloud API ─────────────────────────
+      - key: META_APP_ID
+        sync: false
+      - key: META_APP_SECRET
+        sync: false
+      - key: META_CONFIG_ID
+        sync: false
+      - key: META_BUSINESS_ID
+        sync: false
+      - key: META_WABA_ID
+        sync: false
+      - key: META_PHONE_NUMBER_ID
+        sync: false
+      - key: META_SYSTEM_USER_TOKEN
+        sync: false
+      - key: META_WEBHOOK_VERIFY_TOKEN
+        sync: false
+      - key: META_API_VERSION
+        value: "v21.0"
+      - key: CAMPAIGN_SEND_LIMIT
+        value: "1000"
+
+  # ============================================================
+  #  FRONTEND — Site Estático
+  # ============================================================
+  - type: web
+    name: oddrive-frontend
+    env: static
+    rootDir: frontend
+    buildCommand: echo "Static site — no build required"
+    staticPublishPath: .
+    autoDeploy: true
+
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: no-referrer
+      - path: /*
+        name: X-Frame-Options
+        value: SAMEORIGIN
+      - path: /*
+        name: Permissions-Policy
+        value: camera=(self), microphone=(), geolocation=()
+      # Assets versionados: cache longo
+      - path: /assets/*.js
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      - path: /assets/*.css
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      # HTMLs: sem cache (sempre busca versão mais nova)
+      - path: /*.html
+        name: Cache-Control
+        value: no-cache, must-revalidate
+      - path: /campanhas/*.html
+        name: Cache-Control
+        value: no-cache, must-revalidate
+      - path: /gerador-app/*.html
+        name: Cache-Control
+        value: no-cache, must-revalidate
+      - path: /crm/*.html
+        name: Cache-Control
+        value: no-cache, must-revalidate
+      - path: /crm/*.js
+        name: Cache-Control
+        value: no-cache, must-revalidate
+      - path: /crm/*.css
+        name: Cache-Control
+        value: no-cache, must-revalidate
+      - path: /gerador-app/*.js
+        name: Cache-Control
+        value: no-cache, must-revalidate
+      - path: /gerador-app/styles/*.css
+        name: Cache-Control
+        value: no-cache, must-revalidate
+      - path: /gerador-app/*.webmanifest
+        name: Cache-Control
+        value: no-cache, must-revalidate
+
+    routes:
+      # PWA offline pages — não redirecionar
+      - type: rewrite
+        source: /campanhas/offline-driver.html
+        destination: /campanhas/offline-driver.html
+      - type: rewrite
+        source: /campanhas/offline-graphic.html
+        destination: /campanhas/offline-graphic.html

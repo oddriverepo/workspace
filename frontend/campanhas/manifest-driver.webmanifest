@@ -1,0 +1,30 @@
+{
+  "id": "/campanhas/driver.html",
+  "name": "OD Drive Motorista",
+  "short_name": "Motorista",
+  "description": "Fluxo do motorista para envio de evidências da campanha.",
+  "start_url": "/campanhas/driver.html",
+  "scope": "/campanhas/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f5f7fa",
+  "theme_color": "#1d6fd8",
+  "icons": [
+    {
+      "src": "/campanhas/assets/icons/pwa-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/campanhas/assets/icons/pwa-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/campanhas/assets/icons/pwa-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

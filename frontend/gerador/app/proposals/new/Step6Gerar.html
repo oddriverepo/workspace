@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gerar PDF - OD Drive</title>
+  <link rel="stylesheet" href="../../../styles/theme.css">
+  <link rel="stylesheet" href="../../../styles/globals.css">
+  <link rel="stylesheet" href="../../../styles/notifications.css">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: var(--font-family, 'Work Sans', sans-serif);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .wizard-container {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      background: var(--background, #f6f7f8);
+    }
+
+    /* Progress Bar no Topo */
+    .wizard-progress {
+      background: white;
+      border-bottom: 1px solid var(--line, #e3e5e8);
+      padding: 16px 32px 16px;
+    }
+
+    .wizard-logo {
+      width: 160px;
+      height: 42px;
+      background-image: url('../../../public/brand/logo-dev.png');
+      background-size: contain;
+      background-repeat: no-repeat;
+      background-position: left center;
+      text-indent: -9999px;
+      overflow: hidden;
+      margin-bottom: 12px;
+      display: block;
+    }
+
+    .wizard-steps {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: relative;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .wizard-steps::before {
+      content: '';
+      position: absolute;
+      top: 20px;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: var(--line, #e3e5e8);
+      z-index: 0;
+    }
+
+    .wizard-steps-progress {
+      position: absolute;
+      top: 20px;
+      left: 0;
+      height: 2px;
+      background: var(--primary, #1173d4);
+      z-index: 1;
+      transition: width 0.3s ease;
+    }
+
+    .wizard-step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      position: relative;
+      z-index: 2;
+      cursor: default;
+    }
+
+    .wizard-step-circle {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: white;
+      border: 2px solid var(--line, #e3e5e8);
+      color: var(--text-secondary, #5e6470);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 16px;
+      transition: all 0.3s;
+    }
+
+    .wizard-step.active .wizard-step-circle {
+      background: var(--primary, #1173d4);
+      border-color: var(--primary, #1173d4);
+      color: white;
+      box-shadow: 0 0 0 4px rgba(17, 115, 212, 0.1);
+    }
+
+    .wizard-step.completed .wizard-step-circle {
+      background: var(--primary, #1173d4);
+      border-color: var(--primary, #1173d4);
+      color: white;
+    }
+
+    .wizard-step-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary, #5e6470);
+      text-align: center;
+      max-width: 100px;
+    }
+
+    .wizard-step.active .wizard-step-label {
+      color: var(--primary, #1173d4);
+      font-weight: 600;
+    }
+
+    .wizard-step.completed .wizard-step-label {
+      color: var(--text-primary, #1a1d23);
+    }
+
+    .wizard-main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 32px 80px;
+      max-width: 1100px;
+      margin: 0 auto;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .wizard-header {
+      margin-bottom: 16px;
+    }
+
+    .wizard-title {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .wizard-subtitle {
+      font-size: 15px;
+      color: var(--text-secondary, #5e6470);
+    }
+
+    /* Card principal - layout horizontal */
+    .generate-card {
+      background: white;
+      border-radius: 12px;
+      padding: 32px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      display: flex;
+      gap: 40px;
+      align-items: flex-start;
+    }
+
+    .generate-left {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .generate-right {
+      width: 260px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .generate-icon {
+      font-size: 48px;
+      margin-bottom: 12px;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.05); opacity: 0.8; }
+    }
+
+    .generate-title {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text-primary, #1a1d23);
+      margin-bottom: 8px;
+    }
+
+    .generate-subtitle {
+      font-size: 15px;
+      color: var(--text-secondary, #5e6470);
+      margin-bottom: 20px;
+    }
+
+    .generate-progress {
+      background: var(--background, #f6f7f8);
+      height: 8px;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+
+    .generate-progress-bar {
+      height: 100%;
+      background: var(--primary, #1173d4);
+      transition: width 0.5s ease;
+      border-radius: 4px;
+    }
+
+    .generate-status {
+      font-size: 14px;
+      color: var(--text-secondary, #5e6470);
+      margin-bottom: 12px;
+    }
+
+    .presentation-links {
+      background: rgba(17, 115, 212, 0.05);
+      border: 1px solid rgba(17, 115, 212, 0.15);
+      border-radius: 10px;
+      padding: 16px;
+      text-align: left;
+    }
+
+    .presentation-links p {
+      margin: 0 0 8px;
+      font-size: 14px;
+      color: var(--text-secondary, #5e6470);
+    }
+
+    .presentation-links a {
+      font-weight: 600;
+      color: var(--primary, #1173d4);
+      word-break: break-all;
+    }
+
+    .generate-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .pdf-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .generate-btn {
+      background: var(--primary, #1173d4);
+      color: white;
+      border: none;
+      padding: 14px 20px;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: block;
+      width: 100%;
+      text-align: center;
+      box-sizing: border-box;
+    }
+
+    .generate-btn:hover {
+      background: var(--primary-dark, #0d5aa8);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(17, 115, 212, 0.3);
+    }
+
+    .generate-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .generate-btn-secondary {
+      background: white;
+      color: var(--primary, #1173d4);
+      border: 2px solid var(--primary, #1173d4);
+    }
+
+    .generate-btn-secondary:hover {
+      background: var(--primary, #1173d4);
+      color: white;
+    }
+
+    .wizard-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: white;
+      border-top: 1px solid var(--line, #e3e5e8);
+      padding: 12px 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 100;
+    }
+
+    .wizard-actions {
+      display: flex;
+      gap: 12px;
+    }
+
+    .wizard-footer .btn {
+      padding: 10px 18px;
+      font-size: 14px;
+      font-weight: 600;
+      border-radius: 10px;
+      border: none;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .wizard-footer .btn-secondary {
+      background: var(--background, #f6f7f8);
+      color: var(--text-primary, #1a1d23);
+      border: 1px solid var(--line, #e3e5e8);
+    }
+
+    .wizard-footer .btn-secondary:hover {
+      background: var(--line, #e3e5e8);
+      transform: translateY(-1px);
+    }
+
+    .wizard-footer .btn-primary {
+      background: #10b981;
+      color: white;
+    }
+
+    .wizard-footer .btn-primary:hover {
+      background: #059669;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    }
+
+    .wizard-footer .btn:active {
+      transform: translateY(0);
+    }
+
+    .wizard-footer .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <div class="wizard-container">
+    <div class="wizard-progress">
+      <div class="wizard-logo">OD DRIVE</div>
+      <div class="wizard-steps">
+        <div class="wizard-steps-progress" style="width: 100%"></div>
+        <div class="wizard-step completed">
+          <div class="wizard-step-circle">1</div>
+          <div class="wizard-step-label">Dados</div>
+        </div>
+        <div class="wizard-step completed">
+          <div class="wizard-step-circle">2</div>
+          <div class="wizard-step-label">Produtos</div>
+        </div>
+        <div class="wizard-step completed">
+          <div class="wizard-step-circle">3</div>
+          <div class="wizard-step-label">Planilha</div>
+        </div>
+        <div class="wizard-step completed">
+          <div class="wizard-step-circle">4</div>
+          <div class="wizard-step-label">Uploads</div>
+        </div>
+        <div class="wizard-step completed">
+          <div class="wizard-step-circle">5</div>
+          <div class="wizard-step-label">Checagem</div>
+        </div>
+        <div class="wizard-step active">
+          <div class="wizard-step-circle">6</div>
+          <div class="wizard-step-label">Gerar PDF</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="wizard-main">
+      <div class="wizard-header">
+        <h1 class="wizard-title">Gerar Apresentação</h1>
+        <p class="wizard-subtitle">Crie a apresentação no Google Slides, visualize/baixe o link e então gere o PDF final dentro do app.</p>
+      </div>
+
+      <div class="generate-card" id="generate-card">
+        <div class="generate-left">
+          <div class="generate-icon" id="generate-icon"></div>
+          <div class="generate-title" id="generate-title">Pronto para gerar</div>
+          <div class="generate-subtitle" id="generate-subtitle">Clique no botão ao lado para criar a apresentação no Google Slides e gerar o PDF final.</div>
+          <div class="generate-progress" id="generate-progress" style="display: none;">
+            <div class="generate-progress-bar" id="progress-bar" style="width: 0%"></div>
+          </div>
+          <div class="generate-status" id="generate-status"></div>
+          <div class="presentation-links" id="presentation-links" style="display: none;">
+            <p>Link para visualização/download da apresentação:</p>
+            <a href="#" id="presentation-view-link" target="_blank" rel="noopener">Abrir apresentação no Google Slides</a>
+          </div>
+        </div>
+        <div class="generate-right">
+          <div class="generate-actions" id="generate-actions">
+            <button class="generate-btn" id="btn-generate">
+              Gerar apresentação
+            </button>
+            <button class="generate-btn generate-btn-secondary" id="btn-generate-pdf" style="display: none;">
+              Gerar PDF final
+            </button>
+          </div>
+          <div class="pdf-actions" id="pdf-actions" style="display: none;">
+            <button class="generate-btn" id="btn-open-pdf">
+              Baixar PDF
+            </button>
+            <button class="generate-btn generate-btn-secondary" id="btn-open-folder">
+              Abrir no Google Slides
+            </button>
+            <button class="generate-btn generate-btn-secondary" id="btn-new-proposal">
+              Nova Proposta
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="wizard-footer">
+      <button type="button" class="btn btn-secondary" id="btn-back"> Voltar</button>
+      <div class="wizard-actions">
+        <button type="button" class="btn btn-primary" id="btn-finish" style="display: none;"> Concluir e Voltar ao Início</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/assets/config.js"></script>
+  <script src="../../../shared/web-bridge.js"></script>
+  <script src="../../../shared/upload-cache.js"></script>
+  <script src="../../../lib/notifications.js"></script>
+  <script src="../../../lib/impactMetrics.js"></script>
+  <script src="Step6Gerar.js"></script>
+</body>
+</html>

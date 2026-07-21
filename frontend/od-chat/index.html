@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OD Chat</title>
+  <script src="/assets/config.js?v=20260413"></script>
+  <link rel="stylesheet" href="styles.css?v=20260429h" />
+  <link rel="icon" type="image/png" href="/assets/images/logo-oddrive.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    (function() {
+      var p = new URLSearchParams(window.location.search).get('token');
+      if (p) { localStorage.setItem('adminToken', p); window.history.replaceState({}, '', window.location.pathname); }
+      // Aplica tema antes do paint para evitar flash (dark/light persistido).
+      try {
+        var t = localStorage.getItem('odchat:theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', t);
+      } catch (_) {}
+    })();
+  </script>
+</head>
+<body>
+  <div class="chat-app">
+    <!-- ═══ LEFT PANEL ═══ -->
+    <aside class="sidebar-panel" id="sidebarPanel">
+      <header class="sidebar-header">
+        <div class="sidebar-brand">
+          <img class="brand-logo" src="/assets/images/logo-oddrive.png" alt="OD Drive" />
+          <h2 class="sidebar-title">OD Chat</h2>
+        </div>
+        <div class="sidebar-header-actions">
+          <span class="sse-indicator" id="sseIndicator" title="Conectando…" aria-hidden="true"></span>
+          <button type="button" class="icon-btn" id="btnThemeToggle" title="Alternar tema (claro/escuro)">
+            <svg class="icon-theme-dark" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            <svg class="icon-theme-light" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+          </button>
+          <button type="button" class="icon-btn" id="btnNewChat" title="Nova conversa">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          </button>
+        </div>
+      </header>
+      <div class="filter-bar">
+        <div class="search-box search-box--sidebar">
+          <svg class="search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="sidebarSearch" class="search-input" placeholder="Buscar conversa…" />
+        </div>
+        <select id="filterDropdown" class="filter-dropdown">
+          <option value="all">Todas as campanhas</option>
+          <option value="no-campaign">Sem campanha</option>
+        </select>
+      </div>
+      <div class="conversation-list" id="conversationList">
+        <div class="conv-skeleton-list" id="convLoading">
+          <div class="conv-skeleton"><div class="sk-avatar"></div><div class="sk-body"><div class="sk-line sk-line--name"></div><div class="sk-line sk-line--preview"></div></div></div>
+          <div class="conv-skeleton"><div class="sk-avatar"></div><div class="sk-body"><div class="sk-line sk-line--name"></div><div class="sk-line sk-line--preview"></div></div></div>
+          <div class="conv-skeleton"><div class="sk-avatar"></div><div class="sk-body"><div class="sk-line sk-line--name"></div><div class="sk-line sk-line--preview"></div></div></div>
+          <div class="conv-skeleton"><div class="sk-avatar"></div><div class="sk-body"><div class="sk-line sk-line--name"></div><div class="sk-line sk-line--preview"></div></div></div>
+          <div class="conv-skeleton"><div class="sk-avatar"></div><div class="sk-body"><div class="sk-line sk-line--name"></div><div class="sk-line sk-line--preview"></div></div></div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ═══ NEW CHAT PANEL (overlay) ═══ -->
+    <div class="new-chat-panel hidden" id="newChatPanel">
+      <header class="new-chat-header">
+        <button type="button" class="icon-btn" id="btnCloseNewChat" title="Voltar">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+        </button>
+        <span class="new-chat-title">Nova conversa</span>
+      </header>
+      <div class="search-box">
+        <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="searchContacts" class="search-input" placeholder="Buscar por nome, telefone…" />
+      </div>
+      <div class="contact-list" id="contactList"></div>
+    </div>
+
+    <!-- ═══ RIGHT-CLICK CONTEXT MENU ═══ -->
+    <div class="ctx-menu hidden" id="ctxMenu">
+      <div class="ctx-item" data-action="mark-read"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Marcar como lida</div>
+      <div class="ctx-item" data-action="mark-unread"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg> Marcar como não lida</div>
+      <div class="ctx-separator"></div>
+      <div class="ctx-item" data-action="pause-flow"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Pausar automação</div>
+      <div class="ctx-item" data-action="resume-flow"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg> Retomar automação</div>
+      <div class="ctx-separator"></div>
+      <div class="ctx-item" data-action="copy-phone"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copiar telefone</div>
+      <div class="ctx-item" data-action="driver-info"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="7" r="4"/><path d="M5.5 21a8.38 8.38 0 0 1 13 0"/></svg> Dados do motorista</div>
+    </div>
+
+    <!-- ═══ RIGHT PANEL ═══ -->
+    <main class="chat-panel" id="chatPanel">
+      <!-- Empty state -->
+      <div class="chat-empty" id="chatEmpty">
+        <img class="chat-empty-logo" src="/assets/images/logo-oddrive.png" alt="OD Drive" />
+        <h1 class="chat-empty-title">OD Chat</h1>
+        <p class="chat-empty-desc">Selecione uma conversa à esquerda ou inicie uma nova para começar a atender seus motoristas.</p>
+        <div class="chat-empty-hint">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <span>Suas mensagens são protegidas e privadas</span>
+        </div>
+      </div>
+      <!-- Active chat -->
+      <div class="chat-active hidden" id="chatActive">
+        <header class="chat-header" id="chatHeader">
+          <div class="chat-header-avatar" id="chatAvatar"></div>
+          <div class="chat-header-info">
+            <span class="chat-header-name" id="chatName"></span>
+            <span class="chat-header-phone" id="chatPhone"></span>
+          </div>
+          <div class="chat-header-actions">
+            <button type="button" class="icon-btn" id="btnPauseFlow" title="Pausar automação">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+            </button>
+            <button type="button" class="icon-btn" id="btnResumeFlow" title="Retomar automação" style="display:none">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            </button>
+          </div>
+        </header>
+        <div class="messages-area" id="messagesArea">
+          <div class="messages-scroll" id="messagesScroll"></div>
+          <div class="typing-indicator hidden" id="typingIndicator">
+            <span></span><span></span><span></span>
+          </div>
+        </div>
+        <footer class="compose-bar" id="composeBar">
+          <button type="button" class="icon-btn compose-action" id="btnTemplate" title="Enviar template">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+          </button>
+          <div class="compose-input-wrap">
+            <textarea id="composeInput" class="compose-input" placeholder="Digite uma mensagem" rows="1" autocomplete="off"></textarea>
+            <span class="compose-hint" id="composeHint"><kbd>Enter</kbd> envia · <kbd>Shift+Enter</kbd> quebra linha</span>
+          </div>
+          <button type="button" class="send-btn" id="btnSend" title="Enviar (Enter)" disabled>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+          </button>
+        </footer>
+      </div>
+    </main>
+
+    <!-- ═══ TEMPLATE PICKER PANEL ═══ -->
+    <div class="template-picker hidden" id="templatePicker">
+      <header class="template-picker-header">
+        <span>Templates</span>
+        <button type="button" class="icon-btn" id="btnCloseTemplate" title="Fechar">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </header>
+      <div class="template-list" id="templateList">
+        <div class="loading-hint">Carregando templates…</div>
+      </div>
+    </div>
+
+    <!-- ═══ DRIVER INFO PANEL ═══ -->
+    <div class="driver-info-panel hidden" id="driverInfoPanel">
+      <header class="driver-info-header">
+        <button type="button" class="icon-btn" id="btnCloseDriverInfo" title="Fechar">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+        <span class="driver-info-title">Dados do Motorista</span>
+      </header>
+      <div class="driver-info-body" id="driverInfoBody"></div>
+    </div>
+  </div>
+
+  <!-- notification sound (very short beep, data-uri to avoid extra file) -->
+  <audio id="notifSound" preload="auto">
+    <source src="data:audio/wav;base64,UklGRiQDAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQADAAB/f39/fn5+fn19fXx8fHt7e3p6enl5eXh4eHd3d3Z2dnV1dXR0dHNzc3JycnFxcXBwcG9vb25ubm1tbWxsbGtra2pqamlpaWhnaGdnZ2ZmZmVlZWRkZGNjY2JiYmFhYWBgYF9fX15eXV1dXFxcW1tbWlpaWVlZWFhYV1dXVlZWVVVVVFRUU1NTUlJSUVFRUFBQT09PT05OTk1NTUxMTEtLS0pKSklJSUhISEdHR0ZGRkVFRURERENDQ0JCQkFBQUBAQD8/Pz4+Pj09PTw8PDs7Ozo6Ojk5OTg4ODc3NzY2NjU1NTQ0NDMzMzIyMjExMTAwMC8vLy4uLi0tLSwsLCsrKyoqKikpKSgoKCcnJyYmJiUlJSQkJCMjIyIiIiEhISAgIB8fHx4eHh0dHRwcHBsbGxoaGhkZGRgYGBcXFxYWFhUVFRQUFBMTExISEhERERAQEA8PDw4ODg0NDQwMDAsLCwoKCgkJCQgICAcHBwYGBgUFBQQEBAMDAwICAgEBAQAAAP///v7+/f39/Pz8+/v7+vr6+fn5+Pj49/f39vb29fX19PT08/Pz8vLy8fHx8PDw7+/v7u7u7e3t7Ozs6+vr6urq6enp6Ojo5+fn5ubm5eXl5OTk4+Pj4uLi4eHh4ODg39/f3t7e3d3d3Nzc29vb2tra2dnZ2NjY19fX1tbW1dXV1NTU09PT0tLS0dHR0NDQz8/Pzs7Ozc3NzMzMy8vLysrKycrJycnJyMjIx8fHxsbGxcXFxMTEw8PDwsLCwcHBwMDAvr++vr6+vb29vLy8u7u7urq6ubm5uLi4t7e3tra2tbW1tLS0s7OzsrKysbGxsLCwr6+vrq6ura2trKysq6urqqqqqampqKioqampqqqqq6urrKysra2trq6ur6+vsLCwsbGxsrKys7OztLS0tbW1tra2t7e3uLi4ubm5urq6" type="audio/wav" />
+  </audio>
+
+  <script src="od-chat.js?v=20260429h"></script>
+</body>
+</html>

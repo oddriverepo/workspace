@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OD Drive - Admin</title>
+  <link rel="stylesheet" href="./assets/styles.css" />
+  <script>
+    // CAPTURA IMEDIATA DO TOKEN DA URL ANTES DE QUALQUER SCRIPT CARREGAR
+    (function() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const tokenFromUrl = urlParams.get('token');
+      if (tokenFromUrl) {
+        localStorage.setItem('adminToken', tokenFromUrl);
+        console.log('[AUTH] Token capturado da URL e salvo no localStorage');
+        // Remove token da URL
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, newUrl);
+      } else {
+        const existingToken = localStorage.getItem('adminToken');
+        console.log('[AUTH] Sem token na URL. Token no localStorage:', existingToken ? 'PRESENTE' : 'AUSENTE');
+        
+        // Se não tem token, redireciona para workspace/login
+        if (!existingToken) {
+          console.log('[AUTH] Sem token - redirecionando para workspace login');
+          // Tenta usar configuração, senão faz fallback inteligente
+          let workspaceUrl = window.location.origin;
+          if (window.WORKSPACE_CONFIG && window.WORKSPACE_CONFIG.WORKSPACE_URL) {
+            workspaceUrl = window.WORKSPACE_CONFIG.WORKSPACE_URL;
+          } else {
+            // Fallback: se está em localhost:5174, vai para localhost (porta 80/padrão)
+            // se está em onrender.com/backend, vai para /workspace
+            const isProd = window.location.hostname.includes('onrender.com');
+            if (isProd) {
+              workspaceUrl = window.location.origin.replace('backend', 'workspace');
+            } else {
+              // Local: remove porta
+              workspaceUrl = window.location.protocol + '//' + window.location.hostname;
+            }
+          }
+          window.location.href = workspaceUrl + '/login.html';
+        }
+      }
+    })();
+  </script>
+  <script src="/assets/config.js"></script>
+</head>
+<body>
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="wrap">
+      <div class="brand">
+        <h1 id="admin-title-text">Gerenciador de campanhas</h1>
+      </div>
+      <div class="actions">
+        <span id="cacheTimestamp" style="color: rgba(255,255,255,.65); font-size: .8rem; white-space: nowrap;"></span>
+        <button class="btn" id="btnAuditLogs" title="Ver histórico de ações">Histórico</button>
+        <button class="btn" id="btnAdminUsers" title="Gerenciar operadores">Operadores</button>
+        <span id="adminUserName" style="margin-left: 1rem; color: white; font-weight: 600;"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- Chips de filtro + visualizacao -->
+    <div class="campaigns-toolbar">
+      <div class="chips" id="chips">
+        <button class="chip active" data-filter="ativa">Ativas</button>
+        <button class="chip" data-filter="pausada">Pausadas</button>
+        <button class="chip" data-filter="encerrada">Encerradas</button>
+        <button class="chip" data-filter="*">Todas</button>
+      </div>
+      <div class="view-toggle-group" id="campaignsViewToggle" role="group" aria-label="Modo de visualização">
+        <button type="button" class="view-toggle-btn is-active" data-view="default">Padrão</button>
+        <button type="button" class="view-toggle-btn" data-view="pipeline">Pipeline</button>
+        <button type="button" class="view-toggle-btn" data-view="list">Lista</button>
+      </div>
+    </div>
+
+    <div class="campaigns-list-toolbar" id="listSortToolbar" style="display:none;">
+      <label for="listSortSelect" style="font-size:12px;color:#5f6b7b;font-weight:600;">Ordenar por:</label>
+      <select id="listSortSelect" class="list-sort-select">
+        <option value="recent">Mais recentes</option>
+        <option value="alpha">Alfabética (A-Z)</option>
+        <option value="alpha-desc">Alfabética (Z-A)</option>
+        <option value="installed-desc">Instalação (maior %)</option>
+        <option value="installed-asc">Instalação (menor %)</option>
+      </select>
+      <input type="text" id="listSearchInput" class="list-search-input" placeholder="Buscar por nome ou cidade..." />
+    </div>
+
+    <!-- Cards -->
+    <section id="cards" class="grid-cards">
+      <div class="card placeholder">
+        <div class="card-head">
+          <h3 class="m0">Carregando campanhas...</h3>
+          <span class="pill">API OdDrive</span>
+        </div>
+        <p class="small m0">As campanhas são carregadas automaticamente da API OdDrive.</p>
+      </div>
+    </section>
+
+    <p class="small mt16"><b>DICA:</b> As campanhas são sincronizadas automaticamente com a API OdDrive.</p>
+  </div>
+
+    <div class="modal hidden" id="adminPromptModal" aria-hidden="true">
+    <div class="modal-backdrop" data-admin-prompt-dismiss></div>
+    <div class="modal-card modal-card--prompt" role="dialog" aria-modal="true">
+      <button class="modal-close" type="button" data-admin-prompt-dismiss>&times;</button>
+      <h2 class="modal-title" id="adminPromptTitle">Configurações</h2>
+      <p class="prompt-description small" id="adminPromptDescription"></p>
+      <form id="adminPromptForm">
+        <div class="prompt-fields" id="adminPromptFields"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn" id="adminPromptCancel" data-admin-prompt-dismiss>Cancelar</button>
+          <button type="submit" class="btn btn--primary" id="adminPromptConfirm">Continuar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <script src="./js/admin-ui.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+  <script src="./js/app.js"></script>
+</body>
+</html>
+
+

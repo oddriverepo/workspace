@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Workspace OD Drive</title>
+  <link rel="icon" type="image/png" href="assets/images/logo-oddrive.png">
+  <link rel="stylesheet" href="assets/style.css?v=20260518a">
+  <link rel="stylesheet" href="assets/custom-widgets.css?v=20260520e">
+  <script>
+    // Verificação IMEDIATA de autenticação antes de renderizar qualquer coisa
+    (function() {
+      const token = localStorage.getItem('adminToken');
+      if (!token) {
+        // Redireciona imediatamente para login, sem mostrar a página
+        window.location.replace('/login.html');
+      }
+    })();
+  </script>
+</head>
+<body class="workspace-app">
+  <!-- Topbar -->
+  <header class="topbar-fixed">
+    <div class="topbar-content">
+      <div class="topbar-left">
+        <button type="button" class="sidebar-toggle" id="sidebarToggle" aria-label="Alternar menu">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+        </button>
+        <div class="brand">
+          <img class="logo" src="assets/images/logo-oddrive.png" alt="Logo OD Drive">
+          <div class="brand-text">
+            <p class="eyebrow">Tech</p>
+            <h1>Workspace OD DRIVE</h1>
+          </div>
+        </div>
+      </div>
+      <div class="top-actions">
+        <div id="topbarGreeting" class="topbar-greeting">
+          <span class="topbar-greeting-name"></span>
+          <span class="topbar-greeting-time"></span>
+        </div>
+        <button type="button" class="btn ghost" id="logoutBtn">Sair</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Layout com sidebar -->
+  <div class="workspace-layout">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <nav class="sidebar-nav">
+        <button type="button" class="nav-item" data-module="home">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+          </svg>
+          <span>Início</span>
+        </button>
+        
+        <button type="button" class="nav-item" data-module="campanhas">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="9" y1="3" x2="9" y2="21"></line>
+          </svg>
+          <span>Gerenciador de Campanhas</span>
+        </button>
+
+        <button type="button" class="nav-item" data-module="od-chat">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          </svg>
+          <span>OD Flow</span>
+        </button>
+
+        <button type="button" class="nav-item" data-module="motoristas">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+            <circle cx="9" cy="7" r="4"></circle>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+          </svg>
+          <span>Motoristas</span>
+        </button>
+
+        <button type="button" class="nav-item" data-module="crm">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 3h18v18H3z"></path>
+            <path d="M3 9h18"></path>
+            <path d="M9 21V9"></path>
+            <path d="M13 13h4"></path>
+            <path d="M13 17h4"></path>
+          </svg>
+          <span>CRM</span>
+        </button>
+
+        <button type="button" class="nav-item" data-module="meta-ads">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 19V9"></path>
+            <path d="M10 19V5"></path>
+            <path d="M16 19v-7"></path>
+            <path d="M22 19V3"></path>
+          </svg>
+          <span>META ADS</span>
+        </button>
+        
+        <button type="button" class="nav-item" data-module="gerador">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+            <polyline points="10 9 9 9 8 9"></polyline>
+          </svg>
+          <span>Gerador de Orçamentos</span>
+        </button>
+
+        <button type="button" class="nav-item" data-module="fluxo-operacional">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 6h18"></path>
+            <path d="M3 12h18"></path>
+            <path d="M3 18h18"></path>
+            <circle cx="7" cy="6" r="2"></circle>
+            <circle cx="17" cy="12" r="2"></circle>
+            <circle cx="7" cy="18" r="2"></circle>
+          </svg>
+          <span>Fluxo Operacional</span>
+        </button>
+        
+        <button type="button" class="nav-item" data-module="solicitacoes" style="display:none">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+            <circle cx="8.5" cy="7" r="4"></circle>
+            <line x1="20" y1="8" x2="20" y2="14"></line>
+            <line x1="23" y1="11" x2="17" y2="11"></line>
+          </svg>
+          <span>Solicitações</span>
+        </button>
+        
+        <button type="button" class="nav-item" data-module="portal-rep" style="display:none">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+          <span>Portal do Representante</span>
+        </button>
+        
+        <button type="button" class="nav-item" data-module="motorista">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M16 10h2"></path>
+            <path d="M16 14h2"></path>
+            <path d="M6.17 15a3 3 0 0 1 5.66 0"></path>
+            <circle cx="9" cy="11" r="2"></circle>
+            <rect x="2" y="5" width="20" height="14" rx="2"></rect>
+          </svg>
+          <span>Portal do Motorista</span>
+        </button>
+        
+        <button type="button" class="nav-item" data-module="grafica">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="m22 11-1.296-1.296a2.4 2.4 0 0 0-3.408 0L11 16"></path>
+            <path d="M4 8a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2"></path>
+            <circle cx="13" cy="7" r="1" fill="currentColor"></circle>
+            <rect x="8" y="2" width="14" height="14" rx="2"></rect>
+          </svg>
+          <span>Portal da Gráfica</span>
+        </button>
+        
+        <button type="button" class="nav-item" data-module="configuracoes">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"></path>
+          </svg>
+          <span>Configurações</span>
+        </button>
+
+      </nav>
+    </aside>
+
+    <!-- Área principal -->
+    <main class="main-content" id="mainContent">
+      <!-- Conteúdo será carregado aqui -->
+      <div class="welcome-screen" id="welcomeScreen">
+        <div class="welcome-secondary-header">
+          <h2>Panorama geral das campanhas e motoristas</h2>
+          <button type="button" class="cw-add-btn" id="btnAddWidgetHome" style="margin-left:auto">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span>Adicionar widget</span>
+          </button>
+        </div>
+        <div class="apps-grid" id="apps-grid"></div>
+        <section class="workspace-overview" id="workspaceOverview" aria-live="polite"></section>
+      </div>
+      
+      <!-- Iframe para módulos -->
+      <iframe id="moduleFrame" class="module-frame" style="display: none;" frameborder="0"></iframe>
+    </main>
+  </div>
+
+  <!-- Splash Screen de carregamento -->
+  <div class="splash-overlay" id="splashOverlay">
+    <div class="splash-card">
+      <img src="assets/images/logo-oddrive.png" alt="OD Drive" class="splash-logo" />
+      <h2 class="splash-title">Workspace OD Drive</h2>
+      <div class="splash-steps" id="splashSteps">
+        <div class="splash-step" id="splashStepCampaigns">
+          <span class="splash-dot"></span>
+          <span>Carregando campanhas...</span>
+        </div>
+        <div class="splash-step" id="splashStepDrivers">
+          <span class="splash-dot"></span>
+          <span>Carregando motoristas...</span>
+        </div>
+        <div class="splash-step" id="splashStepReady">
+          <span class="splash-dot"></span>
+          <span>Preparando workspace...</span>
+        </div>
+      </div>
+      <div class="splash-progress"><div class="splash-progress-bar" id="splashProgressBar"></div></div>
+      <p class="splash-hint" id="splashHint"></p>
+    </div>
+  </div>
+
+  <script src="assets/config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+  <script src="assets/custom-widgets.js?v=20260520d"></script>
+  <script src="assets/workspace.js?v=20260518a" defer></script>
+</body>
+</html>

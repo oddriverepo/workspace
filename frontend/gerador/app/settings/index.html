@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Configurações - OD Drive</title>
+  <link rel="stylesheet" href="../../styles/globals.css">
+  <link rel="stylesheet" href="../../styles/theme.css">
+  <link rel="stylesheet" href="../../styles/notifications.css">
+  <link rel="stylesheet" href="./settings.css">
+  <script src="/assets/config.js"></script>
+</head>
+<body class="settings-page">
+  <div class="settings-container">
+    <header class="settings-header">
+      <button class="btn-back" id="btn-back">Voltar</button>
+      <h1>Configurações</h1>
+    </header>
+
+    <main class="settings-content">
+      <div class="settings-top-grid">
+        <section class="settings-section section-integration">
+          <div class="section-header">
+            <h2>Integração Google Slides</h2>
+            <p class="section-description">
+              Autorize o aplicativo a duplicar o template e exportar PDFs diretamente no Google Slides.
+            </p>
+          </div>
+
+          <div class="slides-status">
+            <div class="status-indicator">
+              <span class="status-dot" id="status-dot"></span>
+              <span class="status-text" id="status-text">Verificando...</span>
+            </div>
+
+            <div class="status-details" id="status-details" style="display: none;">
+              <div class="detail-row">
+                <span class="detail-label">Status:</span>
+                <span class="detail-value" id="detail-status">---</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Conectado em:</span>
+                <span class="detail-value" id="detail-connected">---</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Expira em:</span>
+                <span class="detail-value" id="detail-expires">---</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-actions">
+            <button class="btn btn-primary" id="btn-connect-slides" style="display:none;">
+              Conectar com Google Slides
+            </button>
+            <button class="btn btn-secondary" id="btn-disconnect-slides" style="display:none;">
+              Desconectar
+            </button>
+            <button class="btn btn-secondary" id="btn-refresh-token" style="display:none;">
+              Renovar token
+            </button>
+          </div>
+
+          <div class="settings-info">
+            <h4>Como funciona?</h4>
+            <ol>
+              <li>Clique em "Conectar com Google Slides".</li>
+              <li>O Google abrirá no navegador solicitando a autorização.</li>
+              <li>Use a mesma conta que possui o template base.</li>
+              <li>Depois de autorizado, volte ao app e gere o PDF normalmente.</li>
+            </ol>
+          </div>
+        </section>
+
+        <section class="settings-section section-template-ids">
+          <div class="section-header">
+            <h2>IDs de Templates e Pastas</h2>
+            <p class="section-description">
+              Cole aqui os IDs das apresentações e pastas do Google Slides/Drive utilizadas pelo gerador.
+              Eles ficam salvos no computador e podem ser alterados a qualquer momento.
+            </p>
+          </div>
+
+          <form id="google-config-form">
+            <div class="config-group">
+              <h3>Templates do Google Slides</h3>
+              <div class="config-grid">
+                <div class="config-field config-field-full">
+                  <label for="templatePresentationId">Template Multi-Orçamento (Genérico)</label>
+                  <input type="text" id="templatePresentationId" placeholder="ID do template com todos os produtos e múltiplos slides de planilha">
+                  <small>Obrigatório quando qtd. de orçamentos &gt; 1. Deve conter slides para todos os produtos e múltiplos placeholders {{planilha}}.</small>
+                </div>
+                <div class="config-field">
+                  <label for="templateOdInId">Template OD IN</label>
+                  <input type="text" id="templateOdInId" placeholder="ID específico para OD IN">
+                </div>
+                <div class="config-field">
+                  <label for="templateOdVtId">Template OD VT</label>
+                  <input type="text" id="templateOdVtId" placeholder="ID específico para OD VT">
+                </div>
+                <div class="config-field">
+                  <label for="templateOdDropId">Template OD DROP</label>
+                  <input type="text" id="templateOdDropId" placeholder="ID específico para OD DROP">
+                </div>
+                <div class="config-field">
+                  <label for="templateOdFullId">Template OD FULL</label>
+                  <input type="text" id="templateOdFullId" placeholder="ID específico para OD FULL">
+                </div>
+                <div class="config-field">
+                  <label for="templateOdPackId">Template OD PACK</label>
+                  <input type="text" id="templateOdPackId" placeholder="ID específico para OD PACK">
+                </div>
+              </div>
+            </div>
+
+            <div class="config-group">
+              <h3>Pastas no Google Drive</h3>
+              <div class="config-grid">
+                <div class="config-field">
+                  <label for="presentationsFolderId">Pasta de apresentações</label>
+                  <input type="text" id="presentationsFolderId" placeholder="ID da pasta no Drive onde salvar as cópias">
+                </div>
+                <div class="config-field">
+                  <label for="assetsFolderId">Pasta para uploads (imagens)</label>
+                  <input type="text" id="assetsFolderId" placeholder="ID da pasta usada para armazenar imagens">
+                </div>
+              </div>
+            </div>
+
+            <label class="config-switch">
+              <input type="checkbox" id="publicShare">
+              <span>Compartilhar automaticamente as apresentações como públicas (link acessível via URL)</span>
+            </label>
+
+            <div class="config-actions">
+              <button type="button" class="btn btn-secondary" id="btn-reset-config">Restaurar padrão</button>
+              <button type="submit" class="btn btn-primary">Salvar IDs</button>
+            </div>
+
+            <p class="config-hint">
+              Dica: o ID fica entre <code>/d/</code> e <code>/edit</code> na URL do Google Slides/Drive.
+            </p>
+          </form>
+        </section>
+      </div>
+
+      <!-- Leads dos Representantes -->
+      <section class="settings-section section-partner-leads" id="section-partner-leads">
+        <div class="section-header">
+          <h2>Leads dos Representantes</h2>
+          <p class="section-description">
+            Sincroniza automaticamente os leads captados pela plataforma OdDrive Parceiros (motoristas cadastrados e leads do WhatsApp) para o MongoDB, disponibilizando-os na lista de Motoristas.
+          </p>
+        </div>
+
+        <div class="leads-sync-status" id="leads-sync-status">
+          <div class="detail-row">
+            <span class="detail-label">Chave API:</span>
+            <span class="detail-value" id="leads-api-key-status">Verificando...</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Última sync:</span>
+            <span class="detail-value" id="leads-last-sync">—</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Total de leads:</span>
+            <span class="detail-value" id="leads-total">—</span>
+          </div>
+          <div class="detail-row" id="leads-error-row" style="display:none;">
+            <span class="detail-label" style="color:var(--danger,#ef4444)">Último erro:</span>
+            <span class="detail-value" id="leads-last-error" style="color:var(--danger,#ef4444)">—</span>
+          </div>
+        </div>
+        <p class="section-description" style="margin:8px 0 16px;font-size:12px;color:var(--text-dim,#6b7280);">A chave de autenticação (<code>LEADS_API_KEY</code>) é configurada diretamente como variável de ambiente no servidor (Render) e nunca é exposta no frontend.</p>
+
+        <form id="leads-sync-form" autocomplete="off">
+          <div class="config-group">
+            <div class="config-grid">
+
+              <div class="config-field">
+                <label for="leads-interval">Intervalo de sincronização</label>
+                <select id="leads-interval" class="filter-select" style="width:100%;">
+                  <option value="15">A cada 15 minutos</option>
+                  <option value="30">A cada 30 minutos</option>
+                  <option value="60" selected>A cada 1 hora</option>
+                  <option value="120">A cada 2 horas</option>
+                  <option value="360">A cada 6 horas</option>
+                  <option value="720">A cada 12 horas</option>
+                  <option value="1440">Uma vez por dia</option>
+                </select>
+              </div>
+
+              <div class="config-field">
+                <label>Janela diária (horário permitido)</label>
+                <div style="display:flex;gap:8px;align-items:center;">
+                  <input type="time" id="leads-window-start" value="08:00" style="flex:1;">
+                  <span>até</span>
+                  <input type="time" id="leads-window-end" value="22:00" style="flex:1;">
+                </div>
+              </div>
+
+              <div class="config-field config-field-full">
+                <label class="config-switch" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                  <input type="checkbox" id="leads-enabled">
+                  <span>Ativar sincronização automática</span>
+                </label>
+              </div>
+
+            </div>
+          </div>
+
+          <div class="config-actions">
+            <button type="button" class="btn btn-secondary" id="btn-leads-sync-now">Sincronizar agora</button>
+            <button type="submit" class="btn btn-primary">Salvar configurações</button>
+          </div>
+          <div id="leads-form-feedback" style="margin-top:8px;font-size:13px;"></div>
+        </form>
+      </section>
+
+    </main>
+  </div>
+
+  <script src="../../shared/web-bridge.js"></script>
+  <script src="../../lib/notifications.js"></script>
+  <script src="./settings.js"></script>
+</body>
+</html>

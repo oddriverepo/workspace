@@ -1,0 +1,191 @@
+/* Toast notifications */
+
+.toast-container {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  bottom: auto;
+  left: auto;
+  transform: none;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.toast {
+  min-width: 320px;
+  max-width: 420px;
+  background: var(--surface, #ffffff);
+  border-radius: var(--radius-md, 12px);
+  padding: 16px 20px;
+  box-shadow: var(--shadow-lg, 0 4px 16px rgba(0, 0, 0, 0.12));
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  pointer-events: all;
+  animation: toastSlideIn 0.3s ease-out;
+  border-left: 4px solid var(--primary, #1173d4);
+}
+
+.toast.toast-success { border-left-color: var(--success, #22c55e); }
+.toast.toast-error { border-left-color: var(--error, #ef4444); }
+.toast.toast-warning { border-left-color: var(--warning, #f59e0b); }
+.toast.toast-info { border-left-color: var(--info, #3b82f6); }
+
+.toast.toast-hiding {
+  animation: toastSlideOut 0.3s ease-in forwards;
+}
+
+.toast-icon {
+  font-size: 20px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.toast-success .toast-icon { color: var(--success, #22c55e); }
+.toast-error .toast-icon { color: var(--error, #ef4444); }
+.toast-warning .toast-icon { color: var(--warning, #f59e0b); }
+.toast-info .toast-icon { color: var(--info, #3b82f6); }
+
+.toast-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.toast-title {
+  font-size: 15px;
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--text-primary, #1a1d23);
+  line-height: 1.4;
+}
+
+.toast-message {
+  font-size: 14px;
+  color: var(--text-secondary, #5e6470);
+  line-height: 1.5;
+}
+
+.toast-close {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary, #9197a3);
+  cursor: pointer;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  line-height: 1;
+  transition: all var(--transition-base, 0.2s ease);
+}
+
+.toast-close:hover {
+  background: var(--background, #f6f7f8);
+  color: var(--text-primary, #1a1d23);
+}
+
+@keyframes toastSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(110%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes toastSlideOut {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(110%);
+  }
+}
+
+/* Modal dialog */
+.od-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.od-modal {
+  background: var(--surface, #ffffff);
+  border-radius: var(--radius-lg, 16px);
+  box-shadow: var(--shadow-xl, 0 8px 24px rgba(0, 0, 0, 0.16));
+  max-width: 480px;
+  width: 90%;
+  animation: modalSlideIn 0.3s ease-out;
+}
+
+.od-modal-header {
+  padding: 24px 24px 16px;
+  border-bottom: 1px solid var(--line, #e3e5e8);
+}
+
+.od-modal-title {
+  font-size: 20px;
+  font-weight: var(--font-weight-bold, 700);
+  color: var(--text-primary, #1a1d23);
+  margin: 0;
+}
+
+.od-modal-body {
+  padding: 24px;
+}
+
+.od-modal-text {
+  font-size: 15px;
+  color: var(--text-secondary, #5e6470);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.od-modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--line, #e3e5e8);
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.od-modal-footer .btn {
+  min-width: 100px;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}

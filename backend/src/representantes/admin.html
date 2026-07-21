@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Solicitações de representantes - OD Drive</title>
+  <link rel="stylesheet" href="../../styles/theme.css">
+  <link rel="stylesheet" href="../../styles/globals.css">
+  <style>
+    body{margin:0;background:#f6f7f8;font-family:"Work Sans",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:#101922;}
+    .shell{width:100%;max-width:none;margin:0;padding:24px clamp(10px,2.2vw,28px) 32px;}
+    .top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;}
+    .top h1{margin:0;font-size:22px;}
+    .card{background:#fff;border:1px solid #e6e9ed;border-radius:16px;box-shadow:0 6px 24px rgba(16,25,34,0.06),0 2px 8px rgba(16,25,34,0.04);padding:16px;}
+    .table-scroll{width:100%;overflow-x:auto;overflow-y:hidden;}
+    table{width:100%;border-collapse:collapse;}
+    .requests-table{min-width:1200px;table-layout:auto;}
+    th,td{padding:10px 8px;border-bottom:1px solid #e6e9ed;text-align:left;font-size:14px;vertical-align:top;}
+    th{color:#6b7785;text-transform:uppercase;font-size:12px;letter-spacing:.2px;white-space:nowrap;}
+    .obs-cell{min-width:260px;}
+    .actions-cell{min-width:340px;}
+    .obs-text{max-height:76px;overflow:auto;font-size:12px;line-height:1.42;word-break:break-word;white-space:pre-wrap;}
+    .row-actions{display:flex;align-items:center;gap:8px;flex-wrap:nowrap;}
+    .row-actions .btn{white-space:nowrap;padding:7px 10px;font-size:13px;}
+    .pill{display:inline-block;padding:6px 10px;border-radius:999px;font-size:12px;font-weight:700;border:1px solid #cfe3fb;background:#e5f0fb;color:#1173d4;}
+    .pill.conv{background:#eaf8f1;border-color:#cceede;color:#167347;}
+    .pill.av{background:#fff4e0;border-color:#ffe1aa;color:#e39225;}
+    .pill.novo{background:#eef1f4;border-color:#e6e9ed;color:#101922;}
+    .btn{appearance:none;border:1px solid transparent;border-radius:10px;padding:8px 12px;font-weight:700;cursor:pointer;transition:.14s ease;}
+    .btn.primary{background:#1173d4;color:#fff;}
+    .btn.ghost{background:#fff;border-color:#e6e9ed;color:#101922;}
+    .btn:hover{transform:translateY(-1px);box-shadow:0 10px 20px rgba(16,25,34,0.10);}
+    .badge{font-size:12px;color:#6b7785;}
+    .empty{padding:16px;color:#6b7785;text-align:center;}
+    @media(max-width:1200px){
+      .requests-table{min-width:1100px;}
+      .actions-cell{min-width:300px;}
+      .row-actions{flex-wrap:wrap;}
+    }
+    @media(max-width:780px){table,thead,tbody,tr,td,th{display:block;}th{display:none;}td{border-bottom:1px solid #e6e9ed;margin-bottom:8px;}.requests-table{min-width:0;}.actions-cell,.obs-cell{min-width:0;}.row-actions{flex-wrap:wrap;}}
+    
+    /* Modal de confirmação */
+    .modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(16,25,34,0.75);z-index:9999;align-items:center;justify-content:center;}
+    .modal-overlay.show{display:flex;}
+    .modal-box{background:#fff;border-radius:16px;box-shadow:0 24px 48px rgba(16,25,34,0.2);width:min(420px,90vw);padding:28px;}
+    .modal-header{margin-bottom:20px;}
+    .modal-header h2{margin:0 0 8px 0;font-size:20px;color:#101922;}
+    .modal-header p{margin:0;font-size:14px;color:#6b7785;}
+    .modal-body{margin-bottom:20px;}
+    .form-field{margin-bottom:14px;}
+    .form-field label{display:block;font-weight:700;margin-bottom:6px;font-size:13px;color:#3d4753;}
+    .form-field input{width:100%;padding:11px 12px;border:1px solid #e6e9ed;border-radius:10px;font:inherit;box-sizing:border-box;font-size:14px;}
+    .form-field input:focus{outline:none;border-color:#1173d4;box-shadow:0 0 0 3px rgba(17,115,212,0.18);}
+    .modal-error{background:#ffeaea;border:1px solid #ffc7c7;color:#c0392b;padding:10px;border-radius:8px;font-size:13px;margin-bottom:14px;display:none;}
+    .modal-error.show{display:block;}
+    .modal-actions{display:flex;gap:10px;justify-content:flex-end;}
+    .modal-actions .btn{min-width:100px;}
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="top">
+      <div>
+        <h1>Solicitações de representantes</h1>
+        <div class="badge">Novas entradas chegam aqui para curadoria do time.</div>
+      </div>
+      <button id="refreshBtn" class="btn ghost">Atualizar</button>
+    </div>
+    <div class="card" id="listCard">
+      <div id="tableWrap"></div>
+    </div>
+  </div>
+
+  <!-- Modal de confirmação para remover -->
+  <div class="modal-overlay" id="removeModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h2>Confirmar remoção</h2>
+        <p>Digite suas credenciais para confirmar a remoção desta solicitação.</p>
+      </div>
+      <div class="modal-body">
+        <div class="modal-error" id="removeError"></div>
+        <form id="removeForm" autocomplete="off">
+          <div class="form-field">
+            <label for="removeUsername">Usuário</label>
+            <input type="text" id="removeUsername" name="remove_username" required autocomplete="off">
+          </div>
+          <div class="form-field">
+            <label for="removePassword">Senha</label>
+            <input type="password" id="removePassword" name="remove_password" required autocomplete="new-password">
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn ghost" id="cancelRemove">Cancelar</button>
+            <button type="submit" class="btn primary" id="confirmRemove" style="background:#c0392b;border-color:#c0392b;">Remover</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="../lib/notifications.js"></script>
+  <script>
+    const tableWrap = document.getElementById('tableWrap');
+    const refreshBtn = document.getElementById('refreshBtn');
+
+    function getApiBase() {
+      // Em produção (Render), usar origem sem porta
+      if (window.location.hostname.includes('onrender.com')) {
+        return window.location.origin;
+      }
+      // Em desenvolvimento local, usar porta 5173
+      if (window.location.port === '5173') {
+        return window.location.origin;
+      }
+      // Fallback para desenvolvimento local
+      return 'http://localhost:5173';
+    }
+
+    function badge(status){
+      const map = {convertida:'pill conv', em_avaliacao:'pill av', aprovado:'pill av', novo:'pill novo'};
+      const label = {
+        convertida:'Convertida',
+        em_avaliacao:'Em avaliação',
+        aprovado:'Aprovada',
+        novo:'Nova'
+      }[status] || status;
+      return `<span class="${map[status]||'pill'}">${label}</span>`;
+    }
+
+    function getAuthHeaders() {
+      const token = localStorage.getItem('adminToken') || '';
+      return token ? { 'Authorization': `Bearer ${token}` } : {};
+    }
+
+    async function fetchList() {
+      tableWrap.innerHTML = '<div class="empty">Carregando...</div>';
+      try {
+        const res = await fetch(`${getApiBase()}/api/representatives/requests`, {
+          headers: getAuthHeaders()
+        });
+        const data = await res.json();
+        renderTable(data || []);
+      } catch (err) {
+        console.error(err);
+        tableWrap.innerHTML = '<div class="empty">Erro ao carregar. Verifique a API.</div>';
+      }
+    }
+
+    function renderTable(list){
+      if (!list.length){
+        tableWrap.innerHTML = '<div class="empty">Nenhuma solicitação no momento.</div>';
+        return;
+      }
+      const rows = list.map(item => {
+        const created = item.createdAt ? new Date(item.createdAt).toLocaleString('pt-BR') : '--';
+        const obs = item.observacoes ? `<div class="obs-text">${item.observacoes}</div>` : '<span style="color:#999;">--</span>';
+        return `
+          <tr>
+            <td><strong>${item.anunciante || item.empresa || 'Sem nome'}</strong><br><small>${item.pracas || ''}</small></td>
+            <td>${item.representanteNome}<br><small>${item.representanteEmail}</small></td>
+            <td>${item.numeroCarros || '--'}</td>
+            <td>${item.tempoCampanhaDias || '--'}</td>
+            <td class="obs-cell">${obs}</td>
+            <td>${badge(item.status)}</td>
+            <td>${created}</td>
+            <td class="actions-cell">
+              <div class="row-actions">
+                <button class="btn primary" onclick="convert('${item.id}')">Gerar minuta</button>
+                <button class="btn ghost" onclick="mark('${item.id}','em_avaliacao')">Em avaliação</button>
+                <button class="btn ghost" onclick="mark('${item.id}','aprovado')">Aprovar</button>
+                <button class="btn ghost" onclick="removeRequest('${item.id}')" style="background:#c0392b;color:#fff;border-color:#c0392b;">Remover</button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      tableWrap.innerHTML = `
+        <div class="table-scroll">
+          <table class="requests-table">
+            <thead>
+              <tr>
+                <th>Cliente</th>
+                <th>Representante</th>
+                <th>Carros</th>
+                <th>Dias</th>
+                <th>Observações</th>
+                <th>Status</th>
+                <th>Recebido</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    async function mark(id, status){
+      await fetch(`${getApiBase()}/api/representatives/requests/${id}/status`,{
+        method:'PATCH',
+        headers:{'Content-Type':'application/json', ...getAuthHeaders()},
+        body:JSON.stringify({status})
+      }).catch(()=>{});
+      fetchList();
+    }
+
+    async function showFeedback(title, message) {
+      if (window.modal?.alert) {
+        await window.modal.alert(title, message);
+        return;
+      }
+      if (window.adminAlert) {
+        await window.adminAlert(message, { title });
+        return;
+      }
+      console.warn(`[${title}] ${message}`);
+    }
+
+    async function convert(id){
+      const res = await fetch(`${getApiBase()}/api/representatives/requests/${id}/convert`, { method:'POST', headers: getAuthHeaders() });
+      const body = await res.json().catch(()=> ({}));
+      if (res.ok) {
+        await showFeedback('Conversao concluida', 'Minuta criada. ID: ' + (body.proposalId || 'novo'));
+        fetchList();
+      } else {
+        await showFeedback('Falha na conversao', body.error || 'Falha ao converter.');
+      }
+    }
+
+    function removeRequest(id){
+      currentRemoveId = id;
+      removeModal.classList.add('show');
+      removeUsername.value = '';
+      removePassword.value = '';
+      removeUsername.focus();
+      hideRemoveError();
+    }
+
+    // Modal de remoção
+    const removeModal = document.getElementById('removeModal');
+    const removeForm = document.getElementById('removeForm');
+    const removeUsername = document.getElementById('removeUsername');
+    const removePassword = document.getElementById('removePassword');
+    const cancelRemove = document.getElementById('cancelRemove');
+    const confirmRemove = document.getElementById('confirmRemove');
+    const removeError = document.getElementById('removeError');
+    let currentRemoveId = null;
+
+    function showRemoveError(msg) {
+      removeError.textContent = msg;
+      removeError.classList.add('show');
+    }
+
+    function hideRemoveError() {
+      removeError.classList.remove('show');
+    }
+
+    function closeRemoveModal() {
+      removeModal.classList.remove('show');
+      currentRemoveId = null;
+    }
+
+    cancelRemove.addEventListener('click', closeRemoveModal);
+    
+    removeModal.addEventListener('click', (e) => {
+      if (e.target === removeModal) closeRemoveModal();
+    });
+
+    removeForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hideRemoveError();
+
+      // Guard: modal só deve submeter quando aberto por removeRequest(id)
+      if (!currentRemoveId) {
+        closeRemoveModal();
+        return;
+      }
+
+      const username = removeUsername.value.trim();
+      const password = removePassword.value;
+
+      if (!username || !password) {
+        showRemoveError('Preencha usuário e senha.');
+        return;
+      }
+
+      confirmRemove.disabled = true;
+      confirmRemove.textContent = 'Verificando...';
+
+      try {
+        // Validar credenciais no backend (oddrive-backend em produção)
+        const currentOrigin = window.location.origin;
+        let backendUrl;
+        
+        if (currentOrigin.includes('onrender.com')) {
+          // Em produção no Render, usar URL do backend
+          backendUrl = currentOrigin.replace('oddrive-gerador', 'oddrive-backend');
+        } else if (currentOrigin.includes('localhost') || currentOrigin.includes('127.0.0.1')) {
+          // Em desenvolvimento local
+          backendUrl = currentOrigin.replace(':5173', ':5174');
+        } else {
+          // Fallback
+          backendUrl = 'https://oddrive-backend.onrender.com';
+        }
+        
+        const authRes = await fetch(`${backendUrl}/api/admin/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+
+        if (!authRes.ok) {
+          showRemoveError('Credenciais inválidas.');
+          confirmRemove.disabled = false;
+          confirmRemove.textContent = 'Remover';
+          return;
+        }
+
+        // Credenciais válidas, remover solicitação
+        confirmRemove.textContent = 'Removendo...';
+        const loginData = await authRes.json().catch(() => ({}));
+        const sessionToken = loginData.token || localStorage.getItem('adminToken') || '';
+        const deleteRes = await fetch(`${getApiBase()}/api/representatives/requests/${currentRemoveId}`, {
+          method: 'DELETE',
+          headers: sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {}
+        });
+
+        if (deleteRes.ok) {
+          closeRemoveModal();
+          fetchList();
+        } else {
+          const errBody = await deleteRes.json().catch(() => ({}));
+          showRemoveError(errBody.error || 'Erro ao remover solicitação.');
+          confirmRemove.disabled = false;
+          confirmRemove.textContent = 'Remover';
+        }
+      } catch (err) {
+        console.error(err);
+        showRemoveError('Erro de conexão. Tente novamente.');
+        confirmRemove.disabled = false;
+        confirmRemove.textContent = 'Remover';
+      }
+    });
+
+    refreshBtn.addEventListener('click', fetchList);
+    fetchList();
+  </script>
+</body>
+</html>

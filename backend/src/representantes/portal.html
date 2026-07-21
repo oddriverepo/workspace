@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Portal do Representante - OD Drive</title>
+  <link rel="stylesheet" href="../../styles/theme.css">
+  <link rel="stylesheet" href="../../styles/globals.css">
+  <style>
+    html, body { min-height: 100%; }
+    body {
+      margin: 0;
+      background: #f6f7f8;
+      font-family: "Work Sans", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      color: #101922;
+      overflow-x: hidden;
+      overflow-y: auto;
+    }
+    .shell { width: min(950px, 95vw); margin: 16px auto; padding: 0; }
+    .card {
+      background: #fff;
+      border: 1px solid #e6e9ed;
+      border-radius: 16px;
+      box-shadow: 0 6px 24px rgba(16,25,34,0.06), 0 2px 8px rgba(16,25,34,0.04);
+      padding: 22px;
+    }
+    .header { display:flex; align-items:center; gap:14px; margin-bottom:16px; }
+    .header img { width:52px; height:52px; border-radius:12px; object-fit:cover; box-shadow:0 6px 16px rgba(17,115,212,0.18); }
+    h1 { margin:0; font-size:22px; }
+    p.lead { margin:0; color:#6b7785; font-size:14px; }
+
+    /* Grid principal: duas colunas onde couber, uma coluna em telas menores */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 14px 14px;
+      margin-top: 14px;
+    }
+    /* Campos menores agrupados */
+    .grid-small {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+      grid-column: 1 / -1;
+    }
+    .full { grid-column: 1 / -1; }
+
+    label { font-weight:700; display:block; margin-bottom:6px; font-size:13px; color:#3d4753; }
+    input, textarea {
+      width:100%;
+      padding:11px 12px;
+      border:1px solid #e6e9ed;
+      border-radius:10px;
+      font:inherit;
+      box-sizing:border-box;
+      font-size:14px;
+    }
+    textarea { min-height: 110px; resize: vertical; }
+    input:focus, textarea:focus { outline:none; border-color:#1173d4; box-shadow:0 0 0 3px rgba(17,115,212,0.18); }
+
+    .actions { display:flex; gap:10px; margin-top:16px; grid-column:1 / -1; }
+    .btn {
+      appearance:none; border:1px solid transparent; border-radius:12px;
+      padding:13px 18px; font-weight:800; cursor:pointer; transition:.14s ease;
+      background:#1173d4; color:#fff; box-shadow:0 12px 24px rgba(17,115,212,0.18); font-size:15px;
+    }
+    .btn:hover { transform:translateY(-1px); box-shadow:0 16px 32px rgba(17,115,212,0.22); }
+    .btn:active { transform:translateY(0); }
+
+    .msg { margin-top:14px; padding:12px; border-radius:12px; font-weight:700; display:none; font-size:14px; }
+    .msg.ok { background:#eaf8f1; border:1px solid #cceede; color:#167347; display:block; }
+    .msg.err { background:#ffeaea; border:1px solid #ffc7c7; color:#c0392b; display:block; }
+
+    @media (max-width: 640px) {
+      .shell { width:96vw; margin:10px auto; }
+      .card { padding:16px; }
+      .grid { grid-template-columns: 1fr; }
+      .grid-small { grid-template-columns: repeat(auto-fit, minmax(130px,1fr)); }
+      .actions { flex-direction: column; }
+      .btn { width: 100%; }
+      h1 { font-size:20px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="card">
+      <div class="header">
+        <img src="../../public/brand/logo-dev.png" alt="OD Drive">
+        <div>
+          <h1>Portal do representante</h1>
+          <p class="lead">Envie os dados básicos para o time montar o orçamento.</p>
+        </div>
+      </div>
+
+      <form id="repForm" class="grid">
+        <div>
+          <label for="representanteNome">Seu nome</label>
+          <input id="representanteNome" name="representanteNome" placeholder="Nome completo">
+        </div>
+        <div>
+          <label for="representanteEmail">Seu e-mail</label>
+          <input id="representanteEmail" name="representanteEmail" type="email" placeholder="email@exemplo.com">
+        </div>
+
+        <div>
+          <label for="representanteTelefone">Telefone/WhatsApp</label>
+          <input id="representanteTelefone" name="representanteTelefone" placeholder="(00) 00000-0000">
+        </div>
+        <div>
+          <label for="anunciante">Anunciante</label>
+          <input id="anunciante" name="anunciante" placeholder="Nome do anunciante">
+        </div>
+
+        <div>
+          <label for="empresa">Empresa</label>
+          <input id="empresa" name="empresa" placeholder="Nome da empresa">
+        </div>
+        <div>
+          <label for="pracas">Praças / cidades</label>
+          <input id="pracas" name="pracas" placeholder="Ex: São Paulo, Rio de Janeiro">
+        </div>
+
+        <div class="grid-small">
+          <div>
+            <label for="numeroCarros">Número de carros</label>
+            <input id="numeroCarros" name="quantity-vehicles" type="number" min="1" placeholder="Ex: 10" autocomplete="off" autocomplete="new-password" inputmode="numeric" data-form-type="other">
+          </div>
+          <div>
+            <label for="tempoCampanhaDias">Duração (dias)</label>
+            <input id="tempoCampanhaDias" name="campaign-duration" type="number" min="1" placeholder="Ex: 30" autocomplete="off" autocomplete="new-password" inputmode="numeric" data-form-type="other">
+          </div>
+        </div>
+
+        <div class="grid-small">
+          <div>
+            <label for="dataInicio">Data de início</label>
+            <input id="dataInicio" name="start-date" type="date" autocomplete="off">
+          </div>
+        </div>
+
+        <div class="grid-small">
+          <div>
+            <label for="validadeDias">Validade (dias)</label>
+            <input id="validadeDias" name="validity-days" type="number" min="1" placeholder="Ex: 15" autocomplete="off" autocomplete="new-password" inputmode="numeric" data-form-type="other">
+          </div>
+        </div>
+
+        <div class="full">
+          <label for="observacoes">Observações</label>
+          <textarea id="observacoes" name="observacoes" placeholder="Detalhes adicionais, briefing, metas, especificações técnicas..."></textarea>
+        </div>
+
+        <div class="actions">
+          <button class="btn" type="submit">Enviar para orçamento</button>
+        </div>
+      </form>
+
+      <div id="message" class="msg"></div>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('repForm');
+    const message = document.getElementById('message');
+
+    function getApiBase() {
+      // SEMPRE usar a origem atual do portal (mesmo servidor que serviu o HTML)
+      // Isso garante que o fetch sempre vá para o servidor correto
+      return window.location.origin;
+    }
+
+    function showMsg(text, ok = false) {
+      message.textContent = text;
+      message.className = ok ? 'msg ok' : 'msg err';
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      message.className = 'msg';
+      
+      const apiUrl = `${getApiBase()}/api/representatives/requests`;
+      console.log('[Portal Representante] Enviando para:', apiUrl);
+      
+      try {
+        const formData = new FormData(form);
+        // Mapear nomes dos campos para o formato esperado pelo backend
+        const data = {
+          representanteNome: formData.get('representanteNome'),
+          representanteEmail: formData.get('representanteEmail'),
+          representanteTelefone: formData.get('representanteTelefone'),
+          anunciante: formData.get('anunciante'),
+          empresa: formData.get('empresa'),
+          pracas: formData.get('pracas'),
+          numeroCarros: formData.get('quantity-vehicles'),
+          tempoCampanhaDias: formData.get('campaign-duration'),
+          dataInicio: formData.get('start-date'),
+          validadeDias: formData.get('validity-days'),
+          observacoes: formData.get('observacoes')
+        };
+        
+        const res = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        
+        console.log('[Portal Representante] Status resposta:', res.status);
+        
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          console.error('[Portal Representante] Erro:', body);
+          showMsg(body.error || 'Falha ao enviar. Tente novamente.', false);
+          return;
+        }
+        
+        form.reset();
+        showMsg('Enviado com sucesso! O time comercial vai cuidar do orçamento.', true);
+        console.log('[Portal Representante] ✅ Enviado com sucesso');
+      } catch (err) {
+        console.error('[Portal Representante] Erro de rede:', err);
+        showMsg('Erro de conexão. Verifique sua rede e tente novamente.', false);
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+{
+  "name": "OD Drive Gerador App",
+  "short_name": "Gerador App",
+  "description": "Aplicativo mobile para criar, revisar e gerar apresentações do gerador de orçamentos da OD Drive.",
+  "start_url": "./?app=v7",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f3f7fb",
+  "theme_color": "#0f5ea8",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

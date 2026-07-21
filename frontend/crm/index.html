@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OD Drive - CRM</title>
+  <script>
+    (function () {
+      var theme = localStorage.getItem('crm:theme') || localStorage.getItem('motoristas:theme') || 'light';
+      document.documentElement.setAttribute('data-theme', theme);
+      var params = new URLSearchParams(window.location.search);
+      var token = params.get('token');
+      if (token) {
+        localStorage.setItem('adminToken', token);
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    })();
+  </script>
+  <script src="/assets/config.js?v=20260715"></script>
+  <link rel="stylesheet" href="./styles.css?v=20260717g">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dom-to-image-more/3.2.0/dom-to-image-more.min.js" defer></script>
+  <script src="./crm.js?v=20260717g" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar__title">
+      <h1>CRM</h1>
+      <span class="sync-state" id="syncState">Aguardando dados</span>
+    </div>
+    <div class="topbar__actions">
+      <span class="topbar__summary" id="funnelHeaderSummary">Aguardando dados</span>
+      <button type="button" class="button button--secondary panel-button" id="btnToggleMetrics" aria-expanded="false" aria-controls="metricsGrid">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V9M10 19V5M16 19v-7M22 19V3"></path></svg>
+        Métricas
+      </button>
+      <button type="button" class="button button--secondary panel-button" id="btnToggleFunnel" aria-expanded="false" aria-controls="funnelContent">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18l-7 8v5l-4 2v-7Z"></path></svg>
+        Funil
+      </button>
+      <button type="button" class="button button--secondary export-button" id="btnExportDesktop" aria-haspopup="menu" aria-expanded="false" title="Exportar funil para desktop">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="1"></rect><path d="M8 20h8M12 16v4"></path></svg>
+        PNG Desktop
+      </button>
+      <button type="button" class="button button--secondary export-button" id="btnExportMobile" aria-haspopup="menu" aria-expanded="false" title="Exportar funil para celular">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2"></rect><path d="M11 18h2"></path></svg>
+        PNG Celular
+      </button>
+      <button type="button" class="icon-button" id="btnTheme" aria-label="Alternar tema" title="Alternar tema">
+        <svg class="theme-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"></path></svg>
+        <svg class="theme-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>
+      </button>
+      <button type="button" class="button button--secondary" id="btnRefresh">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0 2 5.3"></path><path d="M20 4v7h-7"></path></svg>
+        Atualizar
+      </button>
+      <button type="button" class="button button--primary" id="btnCreateLead">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+        Novo lead
+      </button>
+    </div>
+  </header>
+
+  <div class="export-menu hidden" id="exportMenu" role="menu" aria-label="Formato do conteúdo exportado">
+    <span class="export-menu__title" id="exportMenuTitle">Exportar funil</span>
+    <button type="button" class="export-menu__option" role="menuitem" data-export-detail="expanded">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
+      <span><strong>Completo</strong><small>Ramificações e análises</small></span>
+    </button>
+    <button type="button" class="export-menu__option" role="menuitem" data-export-detail="summary">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14M7 12h10M9 18h6"></path></svg>
+      <span><strong>Resumido</strong><small>Somente etapas principais</small></span>
+    </button>
+  </div>
+
+  <main class="page-shell">
+    <section class="metrics-panel is-collapsed" id="metricsPanel" aria-label="Resumo do CRM">
+      <div class="metrics" id="metricsGrid">
+        <div class="metric">
+          <span class="metric__label">Total de leads</span>
+          <strong class="metric__value" id="metricTotal">0</strong>
+        </div>
+        <div class="metric">
+          <span class="metric__label">Encaminhados</span>
+          <strong class="metric__value metric__value--green" id="metricForwarded">0</strong>
+        </div>
+        <div class="metric">
+          <span class="metric__label">Aguardando encaminhamento</span>
+          <strong class="metric__value metric__value--blue" id="metricOpen">0</strong>
+        </div>
+        <div class="metric">
+          <span class="metric__label">Taxa de encaminhamento</span>
+          <strong class="metric__value" id="metricRate">0%</strong>
+        </div>
+      </div>
+    </section>
+
+    <section class="funnel-panel is-collapsed" id="funnelPanel" aria-label="Funil operacional do CRM">
+      <div class="funnel-content" id="funnelContent">
+        <div class="acquisition-toolbar" aria-label="Período do funil">
+          <div class="acquisition-toolbar__title">
+            <span>Aquisição</span>
+            <strong>Período analisado</strong>
+          </div>
+          <label class="acquisition-field acquisition-field--account"><span>Conta</span><select id="funnelAccountSelect"></select></label>
+          <label class="acquisition-field"><span>Período</span>
+            <select id="funnelPeriodPreset">
+              <option value="7">Últimos 7 dias</option>
+              <option value="14">Últimos 14 dias</option>
+              <option value="30" selected>Últimos 30 dias</option>
+              <option value="90">Últimos 90 dias</option>
+              <option value="month">Mês atual</option>
+              <option value="custom">Personalizado</option>
+            </select>
+          </label>
+          <label class="acquisition-field"><span>De</span><input type="date" id="funnelDateFrom"></label>
+          <label class="acquisition-field"><span>Até</span><input type="date" id="funnelDateTo"></label>
+          <button type="button" class="button button--primary acquisition-toolbar__apply" id="btnApplyFunnelPeriod">Aplicar</button>
+          <span class="acquisition-toolbar__state" id="acquisitionSyncState">Aguardando consulta</span>
+        </div>
+        <div class="funnel-export-area" id="funnelExportArea">
+          <p class="funnel-note"><strong id="funnelPeriodLabel">Últimos 30 dias.</strong> A etapa de conversas atribuídas considera somente a atribuição agregada da Meta. Os demais chats do GPT Maker são exibidos separadamente e não confirmam, isoladamente, origem orgânica. Entre o GPT Maker e Leads registrados, o vínculo é estimado pelo nome do perfil e pela ordem das datas; a partir do registro, o telefone confirma o vínculo com o aplicativo.</p>
+
+          <div class="funnel-layout">
+          <div class="funnel-chart" aria-label="Etapas do funil">
+            <div class="funnel-stage funnel-stage--clicks">
+              <span>Cliques nos anúncios</span>
+              <strong id="funnelAdClicks">—</strong>
+              <small id="funnelClickCost">métrica agregada da Meta</small>
+            </div>
+            <div class="funnel-stage-group funnel-stage-group--direct">
+              <button type="button" class="funnel-stage funnel-stage--direct funnel-stage--interactive" id="btnToggleAcquisitionBranches" aria-expanded="false" aria-controls="acquisitionBranches" title="Exibir conciliação entre Meta e GPT Maker">
+                <span>Conversas atribuídas aos anúncios</span>
+                <strong id="funnelAttributedConversations">—</strong>
+                <small id="funnelAttributedRate">aguardando Meta</small>
+                <svg class="funnel-stage__toggle-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"></path></svg>
+              </button>
+              <div class="funnel-branches" id="acquisitionBranches" aria-hidden="true">
+                <div class="funnel-branch-grid funnel-branch-grid--acquisition">
+                  <div class="funnel-branch funnel-branch--direct"><span>Chats totais no GPT Maker</span><strong id="branchGptChats">—</strong><small id="branchGptChatsRate">volume observado no período</small></div>
+                  <div class="funnel-branch funnel-branch--unattributed"><span>Sem atribuição publicitária</span><strong id="branchUnattributedChats">—</strong><small id="branchUnattributedChatsRate">não significa necessariamente orgânico</small></div>
+                </div>
+              </div>
+            </div>
+            <div class="funnel-stage funnel-stage--registered">
+              <span>Leads registrados</span>
+              <strong id="funnelRegistered">0</strong>
+              <small id="funnelRegisteredRate">dados captados pelo agente</small>
+            </div>
+            <div class="funnel-stage funnel-stage--forwarded">
+              <span>Encaminhados</span>
+              <strong id="funnelForwarded">0</strong>
+              <small id="funnelForwardedRate">0% dos registrados</small>
+            </div>
+            <div class="funnel-stage-group funnel-stage-group--resolved">
+              <button type="button" class="funnel-stage funnel-stage--resolved funnel-stage--interactive" id="btnToggleAttendedBranches" aria-expanded="false" aria-controls="attendedBranches" title="Exibir resultados dos atendidos">
+                <span>Atendidos</span>
+                <strong id="funnelResolved">0</strong>
+                <small id="funnelResolvedRate">0% dos encaminhados</small>
+                <svg class="funnel-stage__toggle-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"></path></svg>
+              </button>
+              <div class="funnel-branches" id="attendedBranches" aria-hidden="true">
+                <div class="funnel-branch-grid funnel-branch-grid--outcomes">
+                  <div class="funnel-branch funnel-branch--success"><span>Efetivados</span><strong id="branchOutcomeEffective">0</strong><small id="branchOutcomeEffectiveRate">0% dos atendidos</small></div>
+                  <div class="funnel-branch funnel-branch--registered"><span>Cadastrados</span><strong id="branchOutcomeRegistered">0</strong><small id="branchOutcomeRegisteredRate">0% dos atendidos</small></div>
+                  <div class="funnel-branch funnel-branch--lost"><span>Perdidos</span><strong id="branchOutcomeLost">0</strong><small id="branchOutcomeLostRate">0% dos atendidos</small></div>
+                  <div class="funnel-branch funnel-branch--waiting"><span>Não responderam</span><strong id="branchOutcomeNoAnswer">0</strong><small id="branchOutcomeNoAnswerRate">0% dos atendidos</small></div>
+                  <div class="funnel-branch funnel-branch--pending"><span>Sem resultado</span><strong id="branchOutcomePending">0</strong><small id="branchOutcomePendingRate">0% dos atendidos</small></div>
+                </div>
+              </div>
+            </div>
+            <div class="funnel-stage-group funnel-stage-group--app">
+              <button type="button" class="funnel-stage funnel-stage--app funnel-stage--interactive" id="btnToggleAppBranches" aria-expanded="false" aria-controls="appBranches" title="Exibir origem dos cadastros confirmados">
+                <span>Cadastro confirmado no app</span>
+                <strong id="funnelAppConfirmed">0</strong>
+                <small id="funnelAppRate">0% dos registrados</small>
+                <svg class="funnel-stage__toggle-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"></path></svg>
+              </button>
+              <div class="funnel-branches" id="appBranches" aria-hidden="true">
+                <div class="funnel-branch-grid funnel-branch-grid--app">
+                  <div class="funnel-branch funnel-branch--registered"><span>Cadastraram depois</span><strong id="branchAppRegisteredAfter">0</strong><small id="branchAppRegisteredAfterRate">0% dos confirmados</small></div>
+                  <div class="funnel-branch funnel-branch--existing"><span>Já eram cadastrados</span><strong id="branchAppAlreadyRegistered">0</strong><small id="branchAppAlreadyRegisteredRate">0% dos confirmados</small></div>
+                  <div class="funnel-branch funnel-branch--pending"><span>Sem data comparável</span><strong id="branchAppNoDate">0</strong><small id="branchAppNoDateRate">0% dos confirmados</small></div>
+                </div>
+              </div>
+            </div>
+            <div class="funnel-stage-group funnel-stage-group--campaign">
+              <button type="button" class="funnel-stage funnel-stage--campaign funnel-stage--interactive" id="btnToggleCampaignBranches" aria-expanded="false" aria-controls="campaignBranches" title="Exibir origem dos cadastros em campanha">
+                <span>Em campanha</span>
+                <strong id="funnelInCampaign">0</strong>
+                <small id="funnelCampaignRate">0% dos cadastros confirmados</small>
+                <svg class="funnel-stage__toggle-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"></path></svg>
+              </button>
+              <div class="funnel-branches" id="campaignBranches" aria-hidden="true">
+                <div class="funnel-branch-grid funnel-branch-grid--app">
+                  <div class="funnel-branch funnel-branch--existing"><span>Já cadastrados antes</span><strong id="branchCampaignAlreadyRegistered">0</strong><small id="branchCampaignAlreadyRegisteredRate">0% dos que estão em campanha</small></div>
+                  <div class="funnel-branch funnel-branch--registered"><span>Cadastrados depois</span><strong id="branchCampaignRegisteredAfter">0</strong><small id="branchCampaignRegisteredAfterRate">0% dos que estão em campanha</small></div>
+                  <div class="funnel-branch funnel-branch--pending"><span>Sem data comparável</span><strong id="branchCampaignNoDate">0</strong><small id="branchCampaignNoDateRate">0% dos que estão em campanha</small></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="funnel-details">
+            <section class="funnel-section" aria-labelledby="acquisitionTitle">
+              <div class="funnel-section__heading">
+                <h2 id="acquisitionTitle">Aquisição digital</h2>
+                <span id="acquisitionDetailNotice">Aguardando dados da Meta e do GPT Maker</span>
+              </div>
+              <div class="insight-grid insight-grid--three">
+                <div class="insight-card insight-card--primary"><span>Investimento</span><strong id="acquisitionSpend">—</strong><small id="acquisitionCpc">CPC indisponível</small></div>
+                <div class="insight-card"><span>Conversas atribuídas pela Meta</span><strong id="acquisitionMetaConversations">—</strong><small id="acquisitionMetaConversationCost">Custo indisponível</small></div>
+                <div class="insight-card insight-card--success"><span>Chats únicos no GPT Maker</span><strong id="acquisitionGptConversations">—</strong><small id="acquisitionGptInteractions">Integração pendente</small></div>
+                <div class="insight-card insight-card--review"><span>Chats sem atribuição publicitária</span><strong id="acquisitionUnattributedChats">—</strong><small id="acquisitionUnattributedChatsNote">Diferença entre GPT Maker e Meta</small></div>
+                <div class="insight-card insight-card--primary"><span>Participação atribuída aos anúncios</span><strong id="acquisitionAttributedShare">—</strong><small id="acquisitionAttributedShareNote">Sobre os chats observados</small></div>
+                <div class="insight-card"><span>Conversas atribuídas / cliques</span><strong id="acquisitionClickToDirect">—</strong><small>Conversões atribuídas pela Meta sobre os cliques</small></div>
+                <div class="insight-card"><span>Relação registros vinculados / chats</span><strong id="acquisitionDirectToRegistered">—</strong><small>Vínculos individuais exatos ou prováveis pelo nome</small></div>
+                <div class="insight-card insight-card--campaign"><span>Custo por conversa atribuída</span><strong id="acquisitionCostPerDirect">—</strong><small>Investimento dividido somente pelas conversas atribuídas pela Meta</small></div>
+                <div class="insight-card insight-card--campaign"><span>Custo por lead em campanha</span><strong id="acquisitionCostPerCampaignLead">—</strong><small id="acquisitionCostPerCampaignLeadNote">Investimento dividido pelos leads do período atualmente em campanha</small></div>
+                <div class="insight-card"><span>Perfis com nome utilizável</span><strong id="acquisitionNamedProfiles">—</strong><small>Identidades mínimas disponíveis no GPT Maker</small></div>
+                <div class="insight-card insight-card--primary"><span>Tempo médio até o registro</span><strong id="acquisitionDirectRegistrationTime">—</strong><small id="acquisitionDirectRegistrationTimeSample">Primeiro contato no Direct até a data de registro</small></div>
+              </div>
+              <p class="matching-note"><strong>Como interpretar:</strong> <span id="acquisitionReconciliationNote">chats sem atribuição publicitária são uma estimativa de contatos não conciliados com a Meta; não confirmam, isoladamente, origem orgânica.</span></p>
+            </section>
+
+            <section class="funnel-section" aria-labelledby="matchTitle">
+              <div class="funnel-section__heading">
+                <h2 id="matchTitle">Identificação no aplicativo</h2>
+                <span id="funnelMatchNotice">Analisando a base</span>
+              </div>
+              <div class="insight-grid insight-grid--three">
+                <div class="insight-card insight-card--success"><span>Confirmados por telefone</span><strong id="matchConfirmed">0</strong><small id="matchConfirmedRate">0% dos registrados</small></div>
+                <div class="insight-card insight-card--review"><span>Possível cadastro — revisar</span><strong id="matchProbable">0</strong><small>Nome e cidade semelhantes</small></div>
+                <div class="insight-card"><span>Não encontrados</span><strong id="matchNotFound">0</strong><small id="matchNotFoundRate">0% dos registrados</small></div>
+              </div>
+              <p class="matching-note"><strong>Como interpretar:</strong> somente o telefone confirma automaticamente um cadastro. “Possível cadastro” indica semelhança de nome e cidade e precisa de conferência manual.</p>
+            </section>
+
+            <section class="funnel-section" aria-labelledby="currentSituationTitle">
+              <div class="funnel-section__heading">
+                <h2 id="currentSituationTitle">Situação dos confirmados</h2>
+                <span>Estado atual no aplicativo</span>
+              </div>
+              <div class="insight-grid insight-grid--three">
+                <div class="insight-card"><span>Sem campanha</span><strong id="matchWithoutCampaign">0</strong><small id="matchWithoutCampaignRate">0% dos confirmados</small></div>
+                <div class="insight-card insight-card--campaign"><span>Em campanha</span><strong id="matchInCampaign">0</strong><small id="matchInCampaignRate">0% dos confirmados</small></div>
+                <div class="insight-card insight-card--primary"><span>Conversão para campanha</span><strong id="matchCampaignConversion">0%</strong><small>entre cadastros confirmados</small></div>
+              </div>
+            </section>
+
+            <section class="funnel-section" aria-labelledby="registrationHistoryTitle">
+              <div class="funnel-section__heading">
+                <h2 id="registrationHistoryTitle">Quando ocorreu o cadastro</h2>
+                <span>Comparado à entrada do lead na planilha</span>
+              </div>
+              <div class="insight-grid insight-grid--three">
+                <div class="insight-card insight-card--success"><span>Já eram cadastrados</span><strong id="matchAlreadyRegistered">0</strong><small id="matchAlreadyRegisteredRate">0% dos confirmados</small></div>
+                <div class="insight-card insight-card--primary"><span>Cadastraram depois</span><strong id="matchRegisteredAfter">0</strong><small id="matchRegisteredAfterRate">0% dos confirmados</small></div>
+                <div class="insight-card insight-card--review"><span>Sem data comparável</span><strong id="matchNoRegistrationDate">0</strong><small id="matchNoRegistrationDateRate">0% dos confirmados</small></div>
+              </div>
+            </section>
+
+            <section class="funnel-section" aria-labelledby="campaignHistoryTitle">
+              <div class="funnel-section__heading">
+                <h2 id="campaignHistoryTitle">Histórico dos que estão em campanha</h2>
+                <span id="campaignHistoryNotice">0 motoristas confirmados</span>
+              </div>
+              <div class="insight-grid insight-grid--three">
+                <div class="insight-card insight-card--success"><span>Cadastro anterior ao lead</span><strong id="matchCampaignAlreadyRegistered">0</strong><small id="matchCampaignAlreadyRegisteredRate">0% dos que estão em campanha</small></div>
+                <div class="insight-card insight-card--primary"><span>Cadastro posterior ao lead</span><strong id="matchCampaignRegisteredAfter">0</strong><small id="matchCampaignRegisteredAfterRate">0% dos que estão em campanha</small></div>
+                <div class="insight-card insight-card--review"><span>Sem data comparável</span><strong id="matchCampaignNoDate">0</strong><small id="matchCampaignNoDateRate">0% dos que estão em campanha</small></div>
+              </div>
+            </section>
+          </div>
+          </div>
+        </div>
+
+        <section class="timing-section" aria-labelledby="timingTitle">
+          <div class="funnel-section__heading">
+            <h2 id="timingTitle">Tempo do atendimento</h2>
+            <span>Calculado somente quando as duas datas necessárias estão preenchidas</span>
+          </div>
+          <div class="timing-grid">
+            <div class="timing-metric"><span>Direct até registro</span><strong id="timingDirectRegistration">—</strong><small id="timingDirectRegistrationSample">0 registros calculados</small></div>
+            <div class="timing-metric"><span>Registro até encaminhamento</span><strong id="timingWait">—</strong><small id="timingWaitSample">0 registros calculados</small></div>
+            <div class="timing-metric"><span>Encaminhamento até resolução</span><strong id="timingService">—</strong><small id="timingServiceSample">0 registros calculados</small></div>
+            <div class="timing-metric"><span>Registro até cadastro no app</span><strong id="timingAppRegistration">—</strong><small id="timingAppRegistrationSample">0 cadastros calculados</small></div>
+            <div class="timing-metric"><span>Registro até entrada em campanha</span><strong id="timingCampaignEntry">—</strong><small id="timingCampaignEntrySample">0 vínculos calculados</small></div>
+          </div>
+
+          <div class="attendant-table-wrap">
+            <table class="attendant-table">
+              <thead>
+                <tr>
+                  <th>Atendente</th>
+                  <th>Atendidos</th>
+                  <th>Com resultado</th>
+                  <th>Espera média</th>
+                  <th>Atendimento médio</th>
+                  <th>Cadastro no app médio</th>
+                  <th>Entrada em campanha média</th>
+                </tr>
+              </thead>
+              <tbody id="attendantTimingBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="control-band">
+      <div class="control-band__header">
+        <div class="tabs" role="tablist" aria-label="Listas do CRM">
+          <button type="button" class="tab is-active" role="tab" aria-selected="true" data-view="leads">
+            Leads Registrados <span class="tab__count" id="tabLeadsCount">0</span>
+          </button>
+          <button type="button" class="tab" role="tab" aria-selected="false" data-view="forwarded">
+            Leads encaminhados <span class="tab__count" id="tabForwardedCount">0</span>
+          </button>
+        </div>
+        <button type="button" class="button button--secondary filter-toggle" id="btnToggleFilters" aria-expanded="false" aria-controls="filtersPanel">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"></path></svg>
+          Filtros
+        </button>
+      </div>
+
+      <div class="filters is-collapsed" id="filtersPanel">
+        <label class="field field--search">
+          <span>Busca</span>
+          <div class="search-input">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+            <input type="search" id="filterSearch" placeholder="Nome, cidade, telefone ou campanha">
+          </div>
+        </label>
+        <label class="field">
+          <span>Status</span>
+          <select id="filterStatus">
+            <option value="">Todos</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Atendente</span>
+          <select id="filterAttendant">
+            <option value="">Todos</option>
+          </select>
+        </label>
+        <label class="field" id="originFilterField">
+          <span>Origem</span>
+          <select id="filterOrigin">
+            <option value="">Todas</option>
+          </select>
+        </label>
+      </div>
+    </section>
+
+    <section class="table-section" aria-live="polite">
+      <div class="table-summary">
+        <span id="resultSummary">0 registros</span>
+        <span id="lastUpdated"></span>
+      </div>
+
+      <div class="state-panel" id="loadingState">
+        <span class="spinner" aria-hidden="true"></span>
+        <span>Carregando CRM...</span>
+      </div>
+
+      <div class="state-panel state-panel--error hidden" id="errorState">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v5M12 17h.01"></path></svg>
+        <strong id="errorTitle">Não foi possível carregar o CRM</strong>
+        <span id="errorMessage"></span>
+        <button type="button" class="button button--secondary" id="btnRetry">Tentar novamente</button>
+      </div>
+
+      <div class="state-panel hidden" id="emptyState">
+        <strong>Nenhum registro encontrado</strong>
+        <span>Ajuste os filtros para ampliar a busca.</span>
+      </div>
+
+      <div class="table-wrap hidden" id="tableWrap">
+        <table class="data-table">
+          <thead id="tableHead"></thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+
+      <footer class="pagination hidden" id="pagination">
+        <span id="pageInfo">Página 1 de 1</span>
+        <div class="pagination__actions">
+          <button type="button" class="icon-button" id="btnPreviousPage" aria-label="Página anterior" title="Página anterior">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg>
+          </button>
+          <button type="button" class="icon-button" id="btnNextPage" aria-label="Próxima página" title="Próxima página">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+          </button>
+        </div>
+      </footer>
+    </section>
+  </main>
+
+  <div class="modal hidden" id="leadDetailModal" role="dialog" aria-modal="true" aria-labelledby="detailTitle">
+    <button type="button" class="modal__backdrop" data-close-detail aria-label="Fechar"></button>
+    <section class="modal__panel detail-panel">
+      <header class="modal__header">
+        <div>
+          <span class="modal__eyebrow">Visão do lead</span>
+          <h2 id="detailTitle">Detalhes do lead</h2>
+        </div>
+        <button type="button" class="icon-button" data-close-detail aria-label="Fechar" title="Fechar">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+        </button>
+      </header>
+      <div class="lead-detail" id="leadDetailBody"></div>
+      <footer class="modal__footer">
+        <button type="button" class="button button--secondary" data-close-detail>Fechar</button>
+        <button type="button" class="button button--primary" id="btnDetailEdit">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"></path></svg>
+          Editar dados
+        </button>
+      </footer>
+    </section>
+  </div>
+
+  <div class="modal hidden" id="leadModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <button type="button" class="modal__backdrop" data-close-modal aria-label="Fechar"></button>
+    <section class="modal__panel">
+      <header class="modal__header">
+        <div>
+          <span class="modal__eyebrow" id="modalEyebrow">Leads Registrados</span>
+          <h2 id="modalTitle">Editar lead</h2>
+        </div>
+        <button type="button" class="icon-button" data-close-modal aria-label="Fechar" title="Fechar">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+        </button>
+      </header>
+
+      <form id="leadForm" class="modal__body">
+        <div class="form-grid" id="formFields"></div>
+        <div class="form-message hidden" id="formMessage" role="alert"></div>
+        <footer class="modal__footer">
+          <button type="button" class="button button--secondary" data-close-modal>Cancelar</button>
+          <button type="submit" class="button button--primary" id="btnSaveLead">Salvar alterações</button>
+        </footer>
+      </form>
+    </section>
+  </div>
+
+  <datalist id="attendantOptions"></datalist>
+  <datalist id="statusOptions"></datalist>
+  <datalist id="originOptions"></datalist>
+  <div class="toast hidden" id="crmToast" role="status" aria-live="polite"></div>
+</body>
+</html>

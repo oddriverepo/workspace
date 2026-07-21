@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Login - Workspace OD Drive</title>
+  <link rel="icon" type="image/png" href="assets/images/logo-oddrive.png">
+  <link rel="stylesheet" href="assets/login.css">
+</head>
+<body>
+  <div class="login-shell">
+    <div class="login-card">
+      <div class="login-header">
+        <img src="assets/images/logo-oddrive.png" alt="OD Drive">
+        <h1>Entrar no workspace</h1>
+        <p>Acesse os módulos internos com seu login.</p>
+      </div>
+
+      <div class="error-message" id="errorMessage"></div>
+
+      <form id="loginForm" autocomplete="on">
+        <div class="form-group">
+          <label for="username">Usuário</label>
+          <input
+            type="text"
+            id="username"
+            name="username"
+            placeholder="Digite seu usuário"
+            required
+            autocomplete="username"
+            autofocus
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="password">Senha</label>
+          <input
+            type="password"
+            id="password"
+            name="password"
+            placeholder="Digite sua senha"
+            required
+            autocomplete="current-password"
+          />
+        </div>
+
+        <button type="submit" class="btn-login" id="btnLogin">Entrar</button>
+      </form>
+
+      <p class="disclaimer">Alguns logins podem ter acesso restrito conforme permissões futuras.</p>
+    </div>
+  </div>
+
+  <script src="assets/config.js"></script>
+  <script src="assets/login.js"></script>
+</body>
+</html>

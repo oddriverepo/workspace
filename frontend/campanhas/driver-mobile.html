@@ -1,0 +1,69 @@
+﻿<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#1d6fd8" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="OD Motorista" />
+  <!-- Backend API (opcional): deixe vazio para usar config global -->
+  <meta name="api-base" content="" />
+  <title>OD Drive - Motorista</title>
+  <link rel="manifest" href="/campanhas/manifest-driver.webmanifest" />
+  <link rel="apple-touch-icon" href="/campanhas/assets/icons/apple-touch-icon-180.png" />
+  <link rel="stylesheet" href="./assets/styles.css" />
+  <script src="/assets/config.js"></script>
+</head>
+<body class="mobile-body">
+  <div class="mobile-shell">
+    <header class="mobile-header">
+      <h1>Área do Motorista</h1>
+      <p class="small">Siga o fluxo e capture as imagens</p>
+    </header>
+
+    <section id="driverLogin" class="mobile-card">
+      <form id="driverLoginForm" class="form-grid">
+        <div class="form-group">
+          <label for="driverName">Nome completo</label>
+          <input id="driverName" name="name" type="text" placeholder="Seu nome" required autocomplete="name" />
+        </div>
+        <div class="form-group">
+          <label for="driverPhone">Número de celular</label>
+          <input id="driverPhone" name="phone" type="tel" inputmode="numeric" placeholder="(00) 90000-0000" required autocomplete="tel" />
+        </div>
+        <div class="form-group form-actions">
+          <button type="submit" class="btn btn--primary" id="driverLoginSubmit">Entrar</button>
+        </div>
+      </form>
+      <p class="form-message" id="driverLoginMessage"></p>
+    </section>
+
+    <section id="driverApp" class="mobile-card hidden">
+      <header class="mobile-app-header">
+        <div>
+          <h2 id="driverWelcome">Olá!</h2>
+          <p class="small" id="driverCampaignInfo"></p>
+        </div>
+        <button class="btn" id="driverLogout">Sair</button>
+      </header>
+      <div class="mobile-steps" id="driverSteps">
+        <p class="small">Carregando atividades...</p>
+      </div>
+    </section>
+  </div>
+  <script>
+    window.__PWA_OPTIONS__ = {
+      appId: 'driver-mobile',
+      appName: 'OD Drive Motorista',
+      manifest: '/campanhas/manifest-driver.webmanifest',
+      serviceWorker: '/campanhas/sw.js',
+      scope: '/campanhas/',
+      themeColor: '#1d6fd8'
+    };
+  </script>
+  <script src="/assets/pwa-bootstrap.js"></script>
+  <script src="./js/admin-ui.js"></script>
+  <script type="module" src="./js/driver-native.js"></script>
+</body>
+</html>

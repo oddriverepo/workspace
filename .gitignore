@@ -1,0 +1,240 @@
+# =============================================================================
+#  OD DRIVE — .gitignore
+#  Regra de ouro: NADA de credenciais, dumps, backups ou scripts locais no repo
+# =============================================================================
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 1. SECRETS & CREDENCIAIS  (NUNCA commitar)
+# ─────────────────────────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# Chaves, certificados, tokens
+*.pem
+*.key
+*.pfx
+*.p12
+*.keystore
+*.jks
+*.crt
+*.cer
+*.der
+*.csr
+secrets/
+**/secrets/
+PARAMETROS SECRETOS/
+**/PARAMETROS SECRETOS/
+service-account*.json
+*credentials*.json
+*service-account*.json
+google-credentials*.json
+firebase-adminsdk*.json
+
+# Tokens / cookies salvos
+*.token
+*token.txt
+cookies.txt
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 2. SCRIPTS LOCAIS COM CREDENCIAIS HARDCODED
+# ─────────────────────────────────────────────────────────────────────────────
+sync-api-to-mongo.mjs
+reload-normalized.mjs
+sync-oddrive-safe.ps1
+sync-oddrive-safe*.ps1
+LOGINS_maker*
+sync-backups/
+**/sync-backups/
+
+# Scripts ad-hoc de teste de API
+API_*.ps1
+api-test-results.txt
+api-analysis/
+test-api-*.mjs
+test-api-*.js
+scratch.*
+playground.*
+
+# Artefatos legados AWS/CodeDeploy (Render é o deploy oficial)
+_aws_temp/
+_frontend_aws_temp/
+appspec.yml
+buildspec.yml
+**/appspec.yml
+**/buildspec.yml
+mapeamento-database-cliente.txt
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 3. DEPENDENCIES
+# ─────────────────────────────────────────────────────────────────────────────
+node_modules/
+**/node_modules/
+.pnp
+.pnp.js
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+yarn.lock
+package-lock.json.bak
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 4. BUILD ARTIFACTS
+# ─────────────────────────────────────────────────────────────────────────────
+dist/
+dist-electron/
+build/
+out/
+.next/
+.nuxt/
+.output/
+.vercel/
+.netlify/
+coverage/
+.nyc_output/
+tmp/
+temp/
+.parcel-cache/
+.cache/
+.turbo/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 5. LOGS
+# ─────────────────────────────────────────────────────────────────────────────
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+audit.log
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 6. DADOS LOCAIS / RUNTIME
+# ─────────────────────────────────────────────────────────────────────────────
+backend/data/
+backend/server/data/*.json
+!backend/server/data/.gitkeep
+backend/server/storage/
+backend/storage/
+storage/uploads/
+uploads/
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+
+# Dumps e exports
+*.dump
+*.sql
+*.bson
+*.gz
+mongodump/
+mongo-backup/
+
+# Excel / CSV / dados de teste
+*.xlsx
+*.xls
+*.csv
+*.tsv
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 7. BACKUPS
+# ─────────────────────────────────────────────────────────────────────────────
+*.backup
+*.bak
+*-backup.*
+*.old
+*.orig
+*.bundle
+.gitignore.bak
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 8. SISTEMA OPERACIONAL
+# ─────────────────────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 9. IDE / EDITORES
+# ─────────────────────────────────────────────────────────────────────────────
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.example.json
+.idea/
+*.iml
+*.swp
+*.swo
+*~
+.project
+.classpath
+.factorypath
+.settings/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 10. CERTIFICADOS / MOBILE
+# ─────────────────────────────────────────────────────────────────────────────
+backend/certs/
+**/certs/*.pfx
+**/certs/*.pem
+**/certs/*.key
+.capacitor/
+android/build/
+android/app/build/
+android/.gradle/
+android/local.properties
+android/app/google-services.json
+ios/App/Pods/
+ios/App/build/
+ios/App/GoogleService-Info.plist
+*.apk
+*.aab
+*.ipa
+*.mobileprovision
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 11. DOCUMENTAÇÃO / TREINAMENTO INTERNO
+# ─────────────────────────────────────────────────────────────────────────────
+TREINAMENTO GERADO VSCODE/
+**/TREINAMENTO GERADO VSCODE/
+"Projeto no github/"
+Projeto no github/
+**/Projeto no github/
+_archived/
+**/_archived/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 12. SCRIPTS DE INICIALIZAÇÃO LOCAL
+# ─────────────────────────────────────────────────────────────────────────────
+start-all.ps1
+start-local.ps1
+dev.local.ps1
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 13. TESTES E2E / RESULTADOS
+# ─────────────────────────────────────────────────────────────────────────────
+test-results/
+playwright-report/
+playwright/.cache/
+.playwright/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 14. EDITOR LOCKFILES E AUTOSAVE
+# ─────────────────────────────────────────────────────────────────────────────
+*~
+\#*\#
+.\#*
+.history/
+
+# Coletas locais do MongoDB do cliente; podem conter dados sensiveis.
+leituras-oddrive-readonly/

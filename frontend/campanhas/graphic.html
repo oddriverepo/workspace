@@ -1,0 +1,104 @@
+﻿<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#1d6fd8" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="OD Gráfica" />
+  <title>OD Drive - Gráfica</title>
+  <link rel="manifest" href="/campanhas/manifest-graphic.webmanifest" />
+  <link rel="apple-touch-icon" href="/campanhas/assets/icons/apple-touch-icon-180.png" />
+  <link rel="stylesheet" href="./assets/styles.css" />
+  <link rel="stylesheet" href="./assets/mobile-portals.css" />
+  <script src="/assets/config.js"></script>
+</head>
+<body class="mobile-body">
+  <div class="mobile-shell">
+    <header class="mobile-header">
+      <img src="./assets/images/logo-oddrive.png" alt="OD Drive" class="mobile-header-logo" />
+      <h1>Área da Gráfica</h1>
+      <p class="small">Informe os dados cadastrados pelo administrador para acessar.</p>
+    </header>
+
+    <section id="graphicLogin" class="mobile-card">
+      <form id="graphicLoginForm" class="form-grid">
+        <div class="form-group">
+          <label for="graphicCode">Código da campanha</label>
+          <input id="graphicCode" name="campaignCode" type="text" autocomplete="off" maxlength="50" placeholder="Ex: ABC123" required />
+        </div>
+        <div class="form-group">
+          <label for="graphicResponsible">Nome do responsável</label>
+          <input id="graphicResponsible" name="name" type="text" autocomplete="name" maxlength="150" placeholder="Responsável da gráfica" required />
+        </div>
+        <div class="form-group form-actions">
+          <button type="submit" class="btn btn--primary" id="graphicLoginSubmit">Entrar</button>
+        </div>
+      </form>
+      <p class="form-message" id="graphicLoginMessage"></p>
+    </section>
+
+    <section id="graphicApp" class="mobile-card hidden">
+      <header class="mobile-app-header">
+        <div>
+          <h2 id="graphicWelcome">Bem-vindo!</h2>
+          <p class="small" id="graphicCampaignInfo"></p>
+        </div>
+        <div class="mobile-app-actions">
+          <button class="btn btn--ghost" id="graphicAgendaToggle" type="button" aria-controls="graphicAgendaSidebar" aria-expanded="false">Agenda</button>
+          <button class="btn" id="graphicLogout">Sair</button>
+        </div>
+      </header>
+      <div class="form-group">
+        <label for="graphicDriverSelect">Motorista</label>
+        <select id="graphicDriverSelect"></select>
+        <p class="small muted" id="graphicDriverHint">Selecione um motorista</p>
+      </div>
+      <div class="mobile-steps" id="graphicSteps">
+        <p class="small">Carregando dados da campanha...</p>
+      </div>
+    </section>
+  </div>
+
+  <div class="graphic-agenda-overlay hidden" id="graphicAgendaOverlay"></div>
+  <aside class="graphic-agenda-sidebar hidden" id="graphicAgendaSidebar" aria-hidden="true">
+    <header class="graphic-agenda-sidebar-head">
+      <div>
+        <h3 class="m0">Agenda da semana</h3>
+        <p class="small muted m0" id="graphicAgendaHint">Veja os horários de adesivagem e retirada da campanha.</p>
+      </div>
+      <button class="graphic-agenda-close" id="graphicAgendaClose" type="button" aria-label="Fechar agenda">X</button>
+    </header>
+    <div class="graphic-agenda-sidebar-count">
+      <span class="pill" id="graphicAgendaCount">0 agendamentos</span>
+    </div>
+    <div class="graphic-agenda-grid">
+      <section class="graphic-agenda-col">
+        <h4>Hoje</h4>
+        <ul id="graphicAgendaToday" class="graphic-agenda-list"></ul>
+      </section>
+      <section class="graphic-agenda-col">
+        <h4>Próximos 7 dias</h4>
+        <ul id="graphicAgendaWeek" class="graphic-agenda-list"></ul>
+      </section>
+    </div>
+  </aside>
+
+  <script>
+    window.__PWA_OPTIONS__ = {
+      appId: 'graphic',
+      appName: 'OD Drive Gráfica',
+      manifest: '/campanhas/manifest-graphic.webmanifest',
+      serviceWorker: '/campanhas/sw.js',
+      scope: '/campanhas/',
+      themeColor: '#1d6fd8',
+      promptText: 'Instale o app da gráfica para acessar em tela cheia e com abertura rápida.',
+      iosText: 'No iPhone: toque em Compartilhar e selecione "Adicionar à Tela de Início".'
+    };
+  </script>
+  <script src="/assets/pwa-bootstrap.js"></script>
+  <script src="./js/admin-ui.js"></script>
+  <script src="./js/graphic.js" type="module"></script>
+</body>
+</html>

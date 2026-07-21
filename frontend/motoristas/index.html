@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OD Drive - Motoristas</title>
+  <script>
+    (function () {
+      var t = localStorage.getItem('motoristas:theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+  <script src="/assets/config.js?v=20260404"></script>
+  <link rel="stylesheet" href="./styles.css?v=20260615a" />
+  <script>
+    (function() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const tokenFromUrl = urlParams.get('token');
+      if (tokenFromUrl) {
+        localStorage.setItem('adminToken', tokenFromUrl);
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    })();
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-brand">
+      <h1 class="topbar-title">Motoristas</h1>
+    </div>
+    <div class="topbar-actions">
+      <span class="topbar-count" id="totalCount">0 motoristas</span>
+      <button type="button" class="btn btn--sm btn--icon" id="btnThemeToggle" title="Alternar tema" aria-label="Alternar tema">
+        <svg class="icon-theme-dark" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-theme-light" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <section class="top-panels">
+    <section class="composer-panel composer-panel--filters">
+      <div class="composer-panel__header">
+        <div>
+          <span class="panel-eyebrow">Filtros</span>
+          <div class="panel-title-row">
+            <h2 class="panel-title">Refinar a lista de motoristas</h2>
+            <button type="button" class="btn btn--sm btn--export" id="btnExportDrivers">Exportar</button>
+          </div>
+        </div>
+        <span class="panel-meta filter-result" id="filterResult"></span>
+      </div>
+
+      <div class="filters-bar">
+        <div class="filter-group">
+          <label class="filter-label" for="filterState">Estado</label>
+          <select id="filterState" class="filter-select">
+            <option value="">Todos</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label class="filter-label" for="filterCity">Cidade</label>
+          <select id="filterCity" class="filter-select">
+            <option value="">Todas</option>
+          </select>
+        </div>
+        <div class="filter-group filter-group--campaign">
+          <label class="filter-label" for="filterCampaign">Campanha</label>
+          <select id="filterCampaign" class="filter-select">
+            <option value="">Todas</option>
+          </select>
+        </div>
+        <div class="filter-group filter-search">
+          <label class="filter-label" for="filterSearch">Busca</label>
+          <input type="text" id="filterSearch" class="filter-input" placeholder="Nome, telefone, placa, CPF, PIX, modelo…" />
+        </div>
+      </div>
+    </section>
+
+    <section class="composer-panel composer-panel--bulk">
+      <div class="composer-panel__header">
+        <div>
+          <span class="panel-eyebrow">Disparo em massa</span>
+          <h2 class="panel-title">Usar o grupo filtrado atual</h2>
+        </div>
+        <span class="panel-meta" id="bulkTargetInfo">0 motoristas filtrados</span>
+      </div>
+
+      <div class="bulk-controls-wrap">
+        <div class="composer-grid composer-grid--bulk">
+          <div class="composer-field composer-field--bulk-mode">
+            <label class="filter-label" for="bulkMessageMode">Modo</label>
+            <select id="bulkMessageMode" class="filter-select">
+              <option value="template">Mensagem aprovada</option>
+              <option value="text">Mensagem livre</option>
+            </select>
+          </div>
+
+          <div class="composer-stack bulk-dynamic-field" id="bulkTemplateWrap">
+            <label class="filter-label" for="bulkTemplateSelect">Mensagem aprovada</label>
+            <select id="bulkTemplateSelect" class="filter-select filter-select--wide">
+              <option value="">Selecione</option>
+            </select>
+          </div>
+
+          <div class="composer-stack bulk-dynamic-field hidden" id="bulkTextWrap">
+            <label class="filter-label" for="bulkText">Mensagem</label>
+            <textarea id="bulkText" class="composer-textarea" rows="4" placeholder="Escreva a mensagem que sera enviada para os motoristas filtrados"></textarea>
+          </div>
+
+          <div class="composer-actions composer-actions--bulk-inline">
+            <button type="button" class="btn btn--primary" id="btnBulkSend">Enviar para filtrados</button>
+          </div>
+        </div>
+
+        <label class="toggle-field toggle-field--bulk" for="bulkIsInvite">
+          <input type="checkbox" id="bulkIsInvite" checked />
+          <span>Marcar este envio como convite</span>
+        </label>
+
+        <span class="composer-feedback" id="bulkFeedback"></span>
+      </div>
+    </section>
+  </section>
+
+  <div class="table-wrap" id="tableWrap">
+    <div class="loading-state" id="loadingState">Carregando motoristas...</div>
+    <table class="crm-table" id="crmTable" style="display:none">
+      <thead>
+        <tr>
+          <th class="col-name">Nome</th>
+          <th class="col-phone">Telefone</th>
+          <th class="col-city">Cidade</th>
+          <th class="col-state">UF</th>
+          <th class="col-campaign">Campanha atual</th>
+          <th class="col-plate">Placa</th>
+          <th class="col-model">Modelo</th>
+          <th class="col-cpf">CPF</th>
+          <th class="col-pix">PIX</th>
+          <th class="col-email">Email</th>
+          <th class="col-apps">Apps</th>
+          <th class="col-rating">Rating</th>
+          <th class="col-period">Período</th>
+          <th class="col-date">Cadastro</th>
+        </tr>
+      </thead>
+      <tbody id="crmBody"></tbody>
+    </table>
+    <div class="empty-state hidden" id="emptyState">Nenhum motorista encontrado.</div>
+  </div>
+
+  <div class="modal hidden" id="driverModal" aria-hidden="true">
+    <div class="modal-backdrop" id="modalBackdrop"></div>
+    <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-header">
+        <div>
+          <span class="panel-eyebrow">Histórico de comunicação</span>
+          <h2 class="modal-title" id="modalTitle">Motorista</h2>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button type="button" class="btn btn--sm btn--ghost" id="btnBlockDriver">Bloquear</button>
+          <button type="button" class="btn btn--sm" id="btnCloseModal">Fechar</button>
+        </div>
+      </div>
+
+      <div id="blockReasonSection" style="display:none;padding:12px 18px;border-bottom:1px solid var(--line);background:rgba(248,250,252,.6);">
+        <label class="filter-label" for="blockReasonInput" style="margin-bottom:4px;display:block;">Motivo do bloqueio <span class="small muted">(opcional)</span></label>
+        <textarea id="blockReasonInput" class="composer-textarea" rows="2" placeholder="Ex: Motorista solicitou não ser contatado" style="width:100%;resize:vertical;margin-bottom:8px;"></textarea>
+        <div style="display:flex;gap:8px;">
+          <button type="button" class="btn btn--primary btn--sm" id="btnConfirmBlock">Confirmar bloqueio</button>
+          <button type="button" class="btn btn--ghost btn--sm" id="btnCancelBlock">Cancelar</button>
+        </div>
+        <p class="small text-danger" id="blockReasonError" style="margin-top:6px;min-height:16px;"></p>
+      </div>
+
+      <div class="modal-body">
+        <div class="modal-top-grid">
+          <section class="modal-overview" id="modalOverview"></section>
+
+          <section class="modal-composer">
+            <div class="modal-composer__head">
+              <div>
+                <span class="panel-eyebrow">Envio rapido</span>
+                <h3 class="panel-title">Enviar mensagem</h3>
+                <p class="panel-meta modal-composer__context" id="modalComposerContext">Contexto do envio</p>
+              </div>
+            </div>
+
+            <div class="hidden" aria-hidden="true">
+              <label class="filter-label" for="modalCampaignSelect">Campanha alvo</label>
+              <select id="modalCampaignSelect" class="filter-select">
+                <option value="">Selecione</option>
+              </select>
+            </div>
+
+            <div class="modal-composer__row">
+              <div class="composer-field modal-composer__field modal-composer__field--mode">
+                <label class="filter-label" for="modalMessageMode">Modo</label>
+                <select id="modalMessageMode" class="filter-select">
+                  <option value="template">Mensagem aprovada</option>
+                  <option value="text">Mensagem livre</option>
+                </select>
+              </div>
+
+              <div class="composer-stack modal-composer__field modal-composer__field--template" id="modalTemplateWrap">
+                <label class="filter-label" for="modalTemplateSelect">Mensagem aprovada</label>
+                <select id="modalTemplateSelect" class="filter-select filter-select--wide">
+                  <option value="">Selecione</option>
+                </select>
+              </div>
+
+              <label class="toggle-field toggle-field--modal-inline" for="modalIsInvite">
+                <input type="checkbox" id="modalIsInvite" checked />
+                <span>Marcar como convite</span>
+              </label>
+
+              <button type="button" class="btn btn--primary btn--modal-send" id="btnSendSingle">Enviar</button>
+            </div>
+
+            <div class="composer-stack hidden modal-composer__text" id="modalTextWrap">
+              <label class="filter-label" for="modalText">Mensagem</label>
+              <textarea id="modalText" class="composer-textarea" rows="3" placeholder="Escreva a mensagem que sera enviada para este motorista"></textarea>
+            </div>
+
+            <span class="composer-feedback composer-feedback--modal" id="modalFeedback"></span>
+          </section>
+        </div>
+
+        <section class="modal-history">
+          <div class="history-main">
+            <div class="history-main__header">
+              <div>
+                <span class="panel-eyebrow">Linha do tempo</span>
+                <h3 class="history-title" id="modalHistoryTitle">Selecione uma campanha</h3>
+              </div>
+              <div id="modalHistoryStatus"></div>
+            </div>
+
+            <div class="timeline" id="modalTimeline"></div>
+          </div>
+
+          <aside class="history-sidebar" id="modalCampaignList"></aside>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <script src="./motoristas.js?v=20260615a"></script>
+</body>
+</html>

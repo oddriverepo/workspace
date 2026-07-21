@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Historico de Auditoria - OD Drive Admin</title>
+  <link rel="stylesheet" href="./assets/styles.css" />
+  <script>
+    // Capture token from URL before app scripts.
+    (function () {
+      const urlParams = new URLSearchParams(window.location.search);
+      const tokenFromUrl = urlParams.get('token');
+      if (tokenFromUrl) {
+        localStorage.setItem('adminToken', tokenFromUrl);
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, newUrl);
+      }
+    })();
+  </script>
+  <style>
+    .audit-container {
+      width: 100%;
+      margin: 2rem 0;
+      padding: 0 clamp(12px, 2.4vw, 40px);
+    }
+    .audit-filters {
+      display: grid;
+      grid-template-columns: 1.4fr 1.2fr 1fr auto auto;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    .audit-filters input,
+    .audit-filters select {
+      width: 100%;
+      padding: 0.55rem 0.7rem;
+      border: 1px solid #d7dde6;
+      border-radius: 8px;
+      font-size: 0.92rem;
+      background: #fff;
+    }
+    .audit-hint {
+      margin: 0 0 1rem;
+      color: #5f6b7b;
+      font-size: 0.86rem;
+    }
+    .audit-table-wrap {
+      border: 1px solid #e4e9ef;
+      border-radius: 10px;
+      overflow: hidden;
+      background: #fff;
+      box-shadow: 0 2px 8px rgba(16, 24, 40, 0.06);
+    }
+    .audit-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+    .audit-table thead {
+      background: #2a5f8f;
+      color: #fff;
+    }
+    .audit-table th,
+    .audit-table td {
+      padding: 0.7rem 0.75rem;
+      text-align: left;
+      border-bottom: 1px solid #eef2f6;
+      vertical-align: top;
+      font-size: 0.9rem;
+      word-break: break-word;
+    }
+    .audit-table th:nth-child(1),
+    .audit-table td:nth-child(1) {
+      width: 13rem;
+    }
+    .audit-table th:nth-child(2),
+    .audit-table td:nth-child(2) {
+      width: 10rem;
+    }
+    .audit-table th:nth-child(3),
+    .audit-table td:nth-child(3) {
+      width: 13rem;
+    }
+    .audit-table th:nth-child(4),
+    .audit-table td:nth-child(4) {
+      width: 8rem;
+    }
+    .audit-table th:nth-child(5),
+    .audit-table td:nth-child(5) {
+      width: 7rem;
+    }
+    .audit-table tbody tr:hover {
+      background: #f8fbff;
+    }
+    .user-name {
+      font-weight: 700;
+      color: #1f2937;
+    }
+    .timestamp {
+      color: #566274;
+      font-variant-numeric: tabular-nums;
+    }
+    .action-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.2rem 0.55rem;
+      border-radius: 999px;
+      border: 1px solid #d9e2ef;
+      font-size: 0.74rem;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      text-transform: uppercase;
+      background: #f4f8ff;
+      color: #255ca6;
+      white-space: nowrap;
+    }
+    .action-create { background: #ecfdf3; color: #0f7c41; border-color: #bee9cd; }
+    .action-update { background: #fff8e7; color: #9a6400; border-color: #f0d799; }
+    .action-delete { background: #fff1f1; color: #b42318; border-color: #f7c4c1; }
+    .action-verify { background: #edf4ff; color: #1849a9; border-color: #bfd2f7; }
+    .action-sync { background: #f4f0ff; color: #5925dc; border-color: #d7c8ff; }
+    .action-auth { background: #eef9ff; color: #0e7090; border-color: #b8e5f5; }
+    .entity-chip {
+      display: inline-block;
+      padding: 0.18rem 0.5rem;
+      border-radius: 7px;
+      font-size: 0.76rem;
+      font-weight: 600;
+      background: #f3f4f6;
+      color: #374151;
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 0.2rem 0.52rem;
+      border-radius: 999px;
+      font-size: 0.74rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .status-success {
+      color: #0f7c41;
+      background: #ecfdf3;
+      border: 1px solid #bee9cd;
+    }
+    .status-failure {
+      color: #b42318;
+      background: #fff1f1;
+      border: 1px solid #f7c4c1;
+    }
+    .details-cell {
+      color: #374151;
+      line-height: 1.4;
+    }
+    .no-logs {
+      text-align: center;
+      padding: 2rem;
+      color: #8a94a6;
+    }
+    .load-more {
+      text-align: center;
+      margin: 1rem 0 0;
+    }
+    @media (max-width: 1120px) {
+      .audit-filters {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+    @media (max-width: 760px) {
+      .audit-filters {
+        grid-template-columns: 1fr;
+      }
+      .audit-table-wrap {
+        overflow-x: auto;
+      }
+      .audit-table {
+        min-width: 920px;
+      }
+    }
+  </style>
+  <script src="/assets/config.js"></script>
+</head>
+<body>
+  <div class="topbar">
+    <div class="wrap">
+      <div class="brand">
+        <img src="assets/images/udd-student.png" alt="UDD" class="logo-left" />
+        <h1>Historico de Auditoria</h1>
+      </div>
+      <div class="actions">
+        <button class="btn" id="btnBackDashboard">Voltar ao Dashboard</button>
+        <span id="adminUserName" style="margin-left: 1rem; color: white; font-weight: 600;"></span>
+        <button class="btn" id="btnLogout">Sair</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="audit-container">
+    <div class="audit-filters">
+      <input type="text" id="filterUsername" placeholder="Filtrar por usuario" />
+      <select id="filterAction">
+        <option value="">Todas as acoes</option>
+        <option value="campaign:create">Criar campanha</option>
+        <option value="campaign:update">Atualizar campanha</option>
+        <option value="campaign:delete">Deletar campanha</option>
+        <option value="campaign:sync">Sincronizar campanha</option>
+        <option value="driver:create">Criar motorista</option>
+        <option value="driver:update">Atualizar motorista</option>
+        <option value="driver:delete">Deletar motorista</option>
+        <option value="driver:detach">Desvincular motorista</option>
+        <option value="driver:km-update">Atualizar KM motorista</option>
+        <option value="graphic:create">Criar grafica</option>
+        <option value="graphic:update">Atualizar grafica</option>
+        <option value="graphic:delete">Deletar grafica</option>
+        <option value="review:update">Aplicar revisao</option>
+        <option value="review:delete">Descartar revisao</option>
+        <option value="evidence:verify">Verificar evidencia</option>
+        <option value="evidence:delete">Deletar evidencia</option>
+        <option value="evidence:cleanup">Limpar evidencias orfas</option>
+        <option value="storage:delete">Deletar arquivo de storage</option>
+        <option value="storage:delete-folder">Deletar pasta de storage</option>
+        <option value="audit:clear-all">Limpar historico</option>
+        <option value="LOGIN_SUCCESS">Login admin (sucesso)</option>
+        <option value="LOGIN_FAILURE">Login admin (falha)</option>
+        <option value="LOGOUT">Logout admin</option>
+      </select>
+      <select id="filterEntityType">
+        <option value="">Todos os tipos</option>
+        <option value="campaign">Campaign</option>
+        <option value="driver">Driver</option>
+        <option value="graphic">Graphic</option>
+        <option value="evidence">Evidence</option>
+        <option value="storage_file">Storage file</option>
+        <option value="storage_folder">Storage folder</option>
+        <option value="admin">Admin</option>
+        <option value="session">Session</option>
+      </select>
+      <button class="btn btn--primary" id="btnFilter">Filtrar</button>
+      <button class="btn" id="btnClearFilters">Limpar</button>
+    </div>
+
+    <p class="audit-hint" style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
+      <span>Mostrando eventos mais recentes do MongoDB (colecao <code>admin_audit_log</code>).</span>
+      <button class="btn" id="btnClearAll" style="background:#c0392b;color:#fff;border:none;padding:.5rem .9rem;border-radius:8px;font-weight:600;cursor:pointer;">
+        Limpar historico (apaga TUDO)
+      </button>
+    </p>
+
+    <div class="audit-table-wrap">
+      <table class="audit-table">
+        <thead>
+          <tr>
+            <th>Data/Hora</th>
+            <th>Usuario</th>
+            <th>Acao</th>
+            <th>Tipo</th>
+            <th>Status</th>
+            <th>Detalhes</th>
+          </tr>
+        </thead>
+        <tbody id="auditTableBody">
+          <tr>
+            <td colspan="6" class="no-logs">Carregando...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="load-more" id="loadMoreContainer" style="display: none;">
+      <button class="btn" id="btnLoadMore">Carregar mais</button>
+    </div>
+  </div>
+
+  <script src="./js/audit-logs.js"></script>
+</body>
+</html>

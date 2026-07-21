@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Usuários e Operadores - OD Drive Admin</title>
+  <link rel="stylesheet" href="./assets/styles.css" />
+  <script>
+    (function () {
+      const urlParams = new URLSearchParams(window.location.search);
+      const tokenFromUrl = urlParams.get('token');
+      if (tokenFromUrl) {
+        localStorage.setItem('adminToken', tokenFromUrl);
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, newUrl);
+      }
+    })();
+  </script>
+  <style>
+    .page { width: 100%; margin: 2rem 0; padding: 0 clamp(12px, 2.4vw, 40px); display: grid; grid-template-columns: 380px 1fr; gap: 1.25rem; }
+    @media (max-width: 1000px) { .page { grid-template-columns: 1fr; } }
+    .panel { background:#fff; border:1px solid #e4e9ef; border-radius:10px; box-shadow:0 2px 8px rgba(16,24,40,.06); }
+    .panel h2 { margin:0; padding:.85rem 1rem; border-bottom:1px solid #eef2f6; font-size:.95rem; color:#1f2937; display:flex; align-items:center; justify-content:space-between; gap:8px; }
+    .panel h2 .btn { padding:.35rem .7rem; font-size:.82rem; }
+    .users-list { max-height: 70vh; overflow:auto; }
+    .user-row { padding:.7rem 1rem; border-bottom:1px solid #f0f3f7; cursor:pointer; display:flex; flex-direction:column; gap:2px; }
+    .user-row:hover { background:#f8fbff; }
+    .user-row.active { background:#e8f1fb; border-left:3px solid #2a5f8f; padding-left: calc(1rem - 3px); }
+    .user-row .uname { font-weight:700; color:#1f2937; }
+    .user-row .umeta { font-size:.78rem; color:#5f6b7b; display:flex; gap:8px; align-items:center; }
+    .badge { display:inline-block; padding:1px 8px; border-radius:10px; font-size:.7rem; font-weight:700; }
+    .badge--admin { background:#e8f1fb; color:#2a5f8f; }
+    .badge--viewer { background:#fff4e0; color:#a36009; }
+    .badge--inactive { background:#f4d8d8; color:#a02c2c; }
+    .form { padding: 1rem; display:grid; gap:.7rem; }
+    .form label { font-size:.82rem; color:#566274; display:flex; flex-direction:column; gap:4px; }
+    .form input, .form select { padding:.55rem .7rem; border:1px solid #d7dde6; border-radius:8px; font-size:.92rem; background:#fff; }
+    .form-actions { display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; }
+    .stats { display:grid; grid-template-columns: repeat(3,1fr); gap:.6rem; padding: 1rem; }
+    .stat { background:#f8fbff; border:1px solid #e4e9ef; border-radius:8px; padding:.7rem; text-align:center; }
+    .stat .n { font-size:1.4rem; font-weight:700; color:#1f2937; }
+    .stat .l { font-size:.74rem; color:#5f6b7b; text-transform:uppercase; }
+    .events { padding: 0 1rem 1rem; max-height: 60vh; overflow:auto; }
+    .event { padding:.55rem .7rem; border-left:3px solid #d7dde6; margin:.4rem 0; background:#fafbfc; border-radius:0 6px 6px 0; font-size:.85rem; }
+    .event .when { color:#5f6b7b; font-size:.74rem; font-variant-numeric: tabular-nums; }
+    .event--dispatch { border-left-color:#2a5f8f; }
+    .event--conversation { border-left-color:#10a37f; }
+    .event--audit { border-left-color:#9b59b6; }
+    .event-title { font-weight:600; color:#1f2937; }
+    .empty { padding:1.2rem; color:#5f6b7b; text-align:center; font-size:.88rem; }
+  </style>
+  <script src="/assets/config.js"></script>
+</head>
+<body>
+  <div class="topbar">
+    <div class="wrap">
+      <div class="brand">
+        <img src="assets/images/udd-student.png" alt="UDD" class="logo-left" />
+        <h1>Usuários e Operadores</h1>
+      </div>
+      <div class="actions">
+        <button class="btn" id="btnBackDashboard">Voltar ao Dashboard</button>
+        <span id="adminUserName" style="margin-left: 1rem; color: white; font-weight: 600;"></span>
+        <button class="btn" id="btnLogout">Sair</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="page">
+    <div class="panel">
+      <h2>Operadores <button class="btn btn--primary" id="btnNew">+ Novo</button></h2>
+      <div class="users-list" id="usersList"><div class="empty">Carregando...</div></div>
+    </div>
+
+    <div class="panel" id="rightPanel">
+      <h2 id="rightTitle">Selecione um operador</h2>
+      <div id="rightBody"><div class="empty">Selecione um operador na lista, ou clique em "+ Novo".</div></div>
+    </div>
+  </div>
+
+  <script src="./js/admin-users.js"></script>
+</body>
+</html>

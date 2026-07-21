@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Editar Planilha - OD Drive</title>
+  <link rel="stylesheet" href="../../../styles/theme.css">
+  <link rel="stylesheet" href="../../../styles/globals.css">
+  <link rel="stylesheet" href="../../../styles/notifications.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dom-to-image-more/3.2.0/dom-to-image-more.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Arial', sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .wizard-container {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      background: var(--background, #f6f7f8);
+    }
+
+    .wizard-progress {
+      background: white;
+      border-bottom: 1px solid var(--line, #e3e5e8);
+      padding: 32px 64px 24px;
+    }
+
+    .wizard-logo {
+      width: 160px;
+      height: 42px;
+      background-image: url('../../../../public/brand/logo-dev.png');
+      background-size: contain;
+      background-repeat: no-repeat;
+      background-position: left center;
+      text-indent: -9999px;
+      overflow: hidden;
+      margin-bottom: 32px;
+      display: block;
+    }
+
+    .wizard-steps {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: relative;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .wizard-steps::before {
+      content: '';
+      position: absolute;
+      top: 20px;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: var(--line, #e3e5e8);
+      z-index: 0;
+    }
+
+    .wizard-steps-progress {
+      position: absolute;
+      top: 20px;
+      left: 0;
+      height: 2px;
+      background: var(--primary, #1173d4);
+      z-index: 1;
+      transition: width 0.3s ease;
+    }
+
+    .wizard-step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      position: relative;
+      z-index: 2;
+    }
+
+    .wizard-step-circle {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: white;
+      border: 2px solid var(--line, #e3e5e8);
+      color: var(--text-secondary, #5e6470);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 16px;
+      transition: all 0.3s;
+    }
+
+    .wizard-step.active .wizard-step-circle {
+      background: var(--primary, #1173d4);
+      border-color: var(--primary, #1173d4);
+      color: white;
+      box-shadow: 0 0 0 4px rgba(17, 115, 212, 0.1);
+    }
+
+    .wizard-step.completed .wizard-step-circle {
+      background: var(--primary, #1173d4);
+      border-color: var(--primary, #1173d4);
+      color: white;
+    }
+
+    .wizard-step-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary, #5e6470);
+      text-align: center;
+      max-width: 100px;
+    }
+
+    .wizard-step.active .wizard-step-label {
+      color: var(--primary, #1173d4);
+      font-weight: 600;
+    }
+
+    .wizard-step.completed .wizard-step-label {
+      color: var(--text-primary, #1a1d23);
+    }
+
+    .wizard-main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 32px 120px;
+      max-width: 1400px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .wizard-header {
+      margin-bottom: 32px;
+    }
+
+    .wizard-title {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .wizard-subtitle {
+      font-size: 15px;
+      color: var(--text-secondary, #5e6470);
+    }
+
+    /* Container da planilha */
+    #planilha-container {
+      background: white;
+      padding: 32px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      -webkit-font-smoothing: antialiased;
+      font-smooth: always;
+      image-rendering: optimizeQuality;
+    }
+
+    .planilha-row {
+      display: flex;
+      gap: 24px;
+      align-items: flex-start;
+      margin-top: 24px;
+    }
+
+    .planilha-col-left {
+      flex: 2;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .planilha-col-right {
+      flex: 1;
+    }
+
+    /* Tabelas - estilo Excel */
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      font-family: Arial, sans-serif;
+      font-size: 12px;
+    }
+
+    table th, table td {
+      border: 1px solid #000;
+      padding: 6px 8px;
+      text-align: left;
+      vertical-align: middle;
+    }
+
+    table th {
+      background: #d9d9d9;
+      font-weight: bold;
+      text-align: center;
+    }
+
+    .tabela-veiculacao th {
+      background: #d9d9d9;
+    }
+
+    .tabela-producao th {
+      background: #d9d9d9;
+    }
+
+    .tabela-resumo th {
+      background: #ffff00;
+      font-weight: bold;
+    }
+
+    .tabela-estados th {
+      background: #d9d9d9;
+    }
+
+    .tabela-unitarios {
+      width: 70%;
+      margin: 0 auto;
+    }
+
+    input.cell-input,
+    textarea.cell-input {
+      width: 100%;
+      border: none;
+      background: #ffffff;
+      font-family: Arial, sans-serif;
+      font-size: 12px;
+      padding: 4px 6px;
+      line-height: 1.2;
+      box-sizing: border-box;
+      text-align: inherit;
+      color: #000;
+    }
+
+    input.cell-input[readonly],
+    textarea.cell-input[readonly] {
+      background: #ffffff;
+    }
+
+    input.cell-input:focus,
+    textarea.cell-input:focus {
+      outline: 2px solid var(--primary, #1173d4);
+      background: #fff9e6;
+    }
+
+    textarea.cell-input {
+      resize: vertical;
+      min-height: 36px;
+      line-height: 1.3;
+    }
+
+    .praca-input {
+      white-space: normal;
+      word-break: break-word;
+    }
+
+    .destaque-vermelho {
+      color: #ff0000;
+      font-weight: bold;
+    }
+
+    .total-row {
+      background: #ffffff;
+      font-weight: bold;
+    }
+
+    .wizard-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: white;
+      border-top: 1px solid var(--line, #e3e5e8);
+      padding: 12px 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 100;
+    }
+
+    .wizard-actions {
+      display: flex;
+      gap: 12px;
+    }
+
+    .btn {
+      padding: 10px 18px;
+      font-size: 14px;
+      font-weight: 600;
+      border-radius: 10px;
+      border: none;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn-secondary {
+      background: var(--background, #f6f7f8);
+      color: var(--text-primary, #1a1d23);
+      border: 1px solid var(--line, #e3e5e8);
+    }
+
+    .btn-secondary:hover {
+      background: var(--line, #e3e5e8);
+    }
+
+    .btn-primary {
+      background: var(--primary, #1173d4);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-dark, #0d5aa8);
+      transform: translateY(-1px);
+    }
+  </style>
+</head>
+<body>
+  <div class="wizard-container">
+    <div class="wizard-progress">
+      <div class="wizard-logo">OD DRIVE</div>
+      <div class="wizard-steps">
+        <div class="wizard-steps-progress" style="width: 40%"></div>
+        <div class="wizard-step completed">
+          <div class="wizard-step-circle">1</div>
+          <div class="wizard-step-label">Dados</div>
+        </div>
+        <div class="wizard-step completed">
+          <div class="wizard-step-circle">2</div>
+          <div class="wizard-step-label">Produtos</div>
+        </div>
+        <div class="wizard-step active">
+          <div class="wizard-step-circle">3</div>
+          <div class="wizard-step-label">Editar Planilha</div>
+        </div>
+        <div class="wizard-step">
+          <div class="wizard-step-circle">4</div>
+          <div class="wizard-step-label">Uploads</div>
+        </div>
+        <div class="wizard-step">
+          <div class="wizard-step-circle">5</div>
+          <div class="wizard-step-label">Checagem</div>
+        </div>
+        <div class="wizard-step">
+          <div class="wizard-step-circle">6</div>
+          <div class="wizard-step-label">Gerar PDF</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="wizard-main">
+      <div class="wizard-header">
+        <h1 class="wizard-title">Editar Planilha de Orçamento</h1>
+        <p class="wizard-subtitle">Preencha os valores e os cálculos serão feitos automaticamente</p>
+        <p class="wizard-subtitle" id="orcamento-indicador" style="font-weight:600; color: var(--primary, #1173d4);"></p>
+      </div>
+
+      <div id="planilha-container">
+        <table class="tabela-veiculacao">
+          <thead>
+            <tr>
+              <th colspan="10">VEICULAÇÃO</th>
+            </tr>
+            <tr>
+              <th>TIPO DO<br>ANÚNCIO</th>
+              <th>PRAZO (mês)</th>
+              <th colspan="2">PREÇO<br>UNITÁRIO</th>
+              <th>QTDE DE<br>CARROS</th>
+              <th colspan="2">VALOR<br>TABELA</th>
+              <th>DESCONTO</th>
+              <th colspan="2">VEICULAÇÃO<br>NEGOCIADO</th>
+            </tr>
+          </thead>
+          <tbody id="veiculacao-body">
+          </tbody>
+        </table>
+
+        <div class="planilha-row">
+          <div class="planilha-col-left">
+            <table class="tabela-producao">
+              <thead>
+                <tr>
+                  <th colspan="6">PRODUÇÃO (valor líquido)</th>
+                </tr>
+                <tr>
+                  <th>TIPO<br>PLOTAGEM</th>
+                  <th colspan="2">VALOR POR<br>CARRO</th>
+                  <th>QTDE DE<br>CARROS</th>
+                  <th colspan="2">TOTAL<br>PRODUÇÃO</th>
+                </tr>
+              </thead>
+              <tbody id="producao-body">
+              </tbody>
+            </table>
+
+            <table class="tabela-resumo">
+              <thead>
+                <tr>
+                  <th colspan="3">RESUMO</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style="font-weight: bold;">VALOR VEICULAÇÃO MENSAL (BRUTO)</td>
+                  <td>R$</td>
+                  <td><input class="cell-input" type="text" id="resumo-veiculacao" readonly style="text-align: center; font-weight: bold;"></td>
+                </tr>
+                <tr>
+                  <td style="font-weight: bold;">VALOR PRODUÇÃO (LÍQUIDO)</td>
+                  <td>R$</td>
+                  <td><input class="cell-input" type="text" id="resumo-producao" readonly style="text-align: center; font-weight: bold;"></td>
+                </tr>
+                <tr>
+                  <td style="font-weight: bold;">TOTAL</td>
+                  <td>R$</td>
+                  <td><input class="cell-input" type="text" id="resumo-total" readonly style="text-align: center; font-weight: bold;"></td>
+                </tr>
+              </tbody>
+            </table>
+
+            <table class="tabela-unitarios">
+              <thead>
+                <tr>
+                  <th colspan="3">VALORES UNITÁRIOS</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style="font-weight: bold;">VALOR UNITÁRIO VEICULAÇÃO</td>
+                  <td>R$</td>
+                  <td><input class="cell-input" type="text" id="unit-veiculacao" readonly style="text-align: center;"></td>
+                </tr>
+                <tr>
+                  <td style="font-weight: bold;">VALOR UNITÁRIO PRODUÇÃO</td>
+                  <td>R$</td>
+                  <td><input class="cell-input" type="text" id="unit-producao" readonly style="text-align: center;"></td>
+                </tr>
+                <tr>
+                  <td style="font-weight: bold;">VALOR UNITÁRIO TOTAL</td>
+                  <td>R$</td>
+                  <td><input class="cell-input" type="text" id="unit-total" readonly style="text-align: center; font-weight: bold;"></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="planilha-col-right">
+            <table class="tabela-estados">
+              <thead>
+                <tr>
+                  <th colspan="3">PRAÇAS</th>
+                </tr>
+                <tr>
+                  <th>ESTADO</th>
+                  <th>PRAÇA</th>
+                  <th>QUANTIDADE</th>
+                </tr>
+              </thead>
+              <tbody id="estados-body">
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <p style="margin-top: 20px; font-size: 12px; font-style: italic;">
+          <strong>Desconto válido para essas condições: quantidade e prazo</strong>
+        </p>
+      </div>
+    </div>
+
+    <div class="wizard-footer">
+      <button type="button" class="btn btn-secondary" id="btn-back"> Voltar</button>
+      <div class="wizard-actions">
+        <button type="button" class="btn btn-secondary" id="btn-save-draft"> Salvar Rascunho</button>
+        <button type="button" class="btn btn-primary" id="btn-next">Próximo: Uploads </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="../../../shared/web-bridge.js"></script>
+  <script src="../../../shared/upload-cache.js"></script>
+  <script src="../../../lib/notifications.js"></script>
+  <script src="Step3B-EditarPlanilha.js"></script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+{
+  "id": "/campanhas/graphic.html",
+  "name": "OD Drive Gráfica",
+  "short_name": "Gráfica",
+  "description": "Fluxo da gráfica para envio e acompanhamento de evidências.",
+  "start_url": "/campanhas/graphic.html",
+  "scope": "/campanhas/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f5f7fa",
+  "theme_color": "#1d6fd8",
+  "icons": [
+    {
+      "src": "/campanhas/assets/icons/pwa-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/campanhas/assets/icons/pwa-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/campanhas/assets/icons/pwa-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

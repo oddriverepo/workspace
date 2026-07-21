@@ -1,0 +1,32 @@
+name: Deploy to Render
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  validate:
+    name: Validate & Deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Validate backend package.json
+        run: |
+          cd backend
+          npm ci --omit=dev
+          npm audit --omit=dev --audit-level=moderate
+
+      - name: ✅ Code validated
+        run: |
+          echo "Backend structure validated successfully"
+          echo "🚀 Render will auto-deploy on next sync..."
+          echo ""
+          echo "Monitor deployment at:"
+          echo "https://dashboard.render.com"

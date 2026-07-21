@@ -1,0 +1,78 @@
+﻿<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#1d6fd8" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="OD Gráfica" />
+  <!-- Backend API (opcional): deixe vazio para usar config global -->
+  <meta name="api-base" content="" />
+  <title>OD Drive - Gráfica</title>
+  <link rel="stylesheet" href="./assets/styles.css" />
+  <link rel="manifest" href="/campanhas/manifest-graphic.webmanifest" />
+  <link rel="apple-touch-icon" href="/campanhas/assets/icons/apple-touch-icon-180.png" />
+  <script src="/assets/config.js"></script>
+</head>
+<body class="mobile-body">
+  <div class="mobile-shell">
+    <header class="mobile-header">
+      <h1>Área da Gráfica</h1>
+      <p class="small">Envie fotos para os motoristas</p>
+    </header>
+
+    <section id="graphicLogin" class="mobile-card">
+      <form id="graphicLoginForm" class="form-grid">
+        <div class="form-group">
+          <label for="graphicCampaignCode">Código da campanha</label>
+          <input id="graphicCampaignCode" name="campaignCode" type="text" placeholder="Ex: CAMP2024" required autocomplete="off" />
+        </div>
+        <div class="form-group">
+          <label for="graphicResponsible">Nome do responsável</label>
+          <input id="graphicResponsible" name="name" type="text" placeholder="Seu nome" required autocomplete="name" />
+        </div>
+        <div class="form-group form-actions">
+          <button type="submit" class="btn btn--primary" id="graphicLoginSubmit">Entrar</button>
+        </div>
+      </form>
+      <p class="form-message" id="graphicLoginMessage"></p>
+    </section>
+
+    <section id="graphicApp" class="mobile-card hidden">
+      <header class="mobile-app-header">
+        <div>
+          <h2 id="graphicWelcome">Olá!</h2>
+          <p class="small" id="graphicCampaignInfo"></p>
+        </div>
+        <button class="btn" id="graphicLogout">Sair</button>
+      </header>
+      
+      <div class="form-group" style="margin: 16px 0;">
+        <label for="graphicDriverSelect">Selecione o motorista</label>
+        <select id="graphicDriverSelect" class="form-select" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;">
+          <option value="">Carregando...</option>
+        </select>
+        <p class="small" id="graphicDriverHint" style="margin-top:6px;color:var(--muted);">Selecione um motorista para enviar as imagens.</p>
+      </div>
+
+      <div class="mobile-steps" id="graphicSteps">
+        <p class="small">Carregando atividades...</p>
+      </div>
+    </section>
+  </div>
+  <script>
+    window.__PWA_OPTIONS__ = {
+      appId: 'graphic-mobile',
+      appName: 'OD Drive Gráfica',
+      manifest: '/campanhas/manifest-graphic.webmanifest',
+      serviceWorker: '/campanhas/sw.js',
+      scope: '/campanhas/',
+      themeColor: '#1d6fd8'
+    };
+  </script>
+  <script src="/assets/pwa-bootstrap.js"></script>
+  <script src="./js/admin-ui.js"></script>
+  <script type="module" src="./js/graphic-native.js"></script>
+</body>
+</html>

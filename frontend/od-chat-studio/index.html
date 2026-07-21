@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OD Flow Studio</title>
+  <script src="/assets/config.js?v=20260418"></script>
+  <link rel="stylesheet" href="styles.css?v=20260506d">
+  <script>
+    (function () {
+      var params = new URLSearchParams(window.location.search || "");
+      var token = params.get("token");
+      if (token) {
+        localStorage.setItem("adminToken", token);
+        params.delete("token");
+        var nextQuery = params.toString();
+        var nextUrl = window.location.pathname + (nextQuery ? "?" + nextQuery : "");
+        window.history.replaceState({}, "", nextUrl);
+      }
+    })();
+  </script>
+</head>
+<body>
+  <div class="studio-shell">
+    <header class="studio-header">
+      <div class="studio-brand">
+        <p class="studio-kicker">OD Chat</p>
+        <h1>OD Flow Studio</h1>
+      </div>
+      <div class="studio-template-selector">
+        <select id="templateDropdown" class="template-dropdown">
+          <option value="">Selecione um template</option>
+        </select>
+        <div class="template-dropdown-meta" id="templateStats"></div>
+      </div>
+      <div class="studio-actions">
+        <button type="button" class="btn btn-ghost" id="btnReloadTemplates">Atualizar</button>
+        <button type="button" class="btn btn-secondary" id="btnDispatchesPanel" aria-expanded="false" aria-controls="dispatchesPanel">Lista de Disparos</button>
+        <button type="button" class="btn btn-secondary" id="btnTemplatesPanel" aria-expanded="false" aria-controls="templatesPanel">Templates</button>
+        <button type="button" class="btn btn-secondary" id="btnSaveDraft">Salvar rascunho</button>
+        <button type="button" class="btn btn-primary" id="btnPublish">Publicar</button>
+      </div>
+    </header>
+
+    <div class="studio-main">
+      <section class="canvas-panel">
+        <div class="canvas-top" id="canvasTop">
+          <div class="empty-card">Selecione um template para configurar o fluxo.</div>
+        </div>
+        <div class="branch-board-wrap">
+          <div class="branch-board" id="branchBoard"></div>
+        </div>
+      </section>
+
+      <aside class="inspector-panel" id="sideRail">
+        <section class="panel-drawer" data-panel-drawer="config">
+          <button type="button" class="drawer-tab" data-toggle-panel="config" aria-expanded="false">
+            <span class="drawer-tab-kicker">Flow</span>
+            <span class="drawer-tab-title">Configurações</span>
+          </button>
+          <div class="panel-card drawer-card">
+            <div class="panel-head panel-head--tight">
+              <div>
+                <p class="panel-kicker">Flow</p>
+                <h2>Configurações</h2>
+              </div>
+            </div>
+            <div id="inspectorPanel" class="inspector-body">
+              <div class="empty-card">Selecione um template para configurar.</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel-drawer" data-panel-drawer="simulation">
+          <button type="button" class="drawer-tab" data-toggle-panel="simulation" aria-expanded="false">
+            <span class="drawer-tab-kicker">Preview</span>
+            <span class="drawer-tab-title">Simulação</span>
+          </button>
+          <div class="panel-card drawer-card">
+            <div id="simulationPanel" class="simulation-body">
+              <div class="empty-card">A Simulação aparece aqui quando um template for carregado.</div>
+            </div>
+          </div>
+        </section>
+      </aside>
+    </div>
+
+    <footer class="studio-statusbar">
+      <div class="status-chip" id="statusMessage" data-tone="muted">Pronto</div>
+      <div class="selection-meta" id="selectionMeta"></div>
+    </footer>
+  </div>
+
+  <div id="dispatchesOverlay" class="templates-overlay" hidden></div>
+  <section id="dispatchesPanel" class="templates-panel dispatches-panel" aria-hidden="true" hidden>
+    <header class="templates-panel-head">
+      <div>
+        <p class="panel-kicker">OD Flow</p>
+        <h2 id="dispatchesPanelTitle">Lista de Disparos</h2>
+      </div>
+      <div class="dispatches-breadcrumb" id="dispatchesBreadcrumb" hidden>
+        <button type="button" class="btn btn-ghost btn-sm" id="btnDispatchesBack">← Voltar para a lista</button>
+      </div>
+      <button type="button" class="btn btn-ghost" id="btnCloseDispatches" aria-label="Fechar">Fechar</button>
+    </header>
+    <div class="templates-panel-body">
+      <div class="dispatches-view is-active" data-disp-view="list">
+        <div class="templates-toolbar">
+          <button type="button" class="btn btn-ghost" id="btnReloadDispatches">Recarregar</button>
+          <span class="muted" id="dispatchesCount"></span>
+        </div>
+        <div id="dispatchesListContainer" class="dispatches-table-wrap">
+          <div class="empty-card">Carregando disparos...</div>
+        </div>
+      </div>
+      <div class="dispatches-view" data-disp-view="detail">
+        <div class="dispatches-detail-header" id="dispatchesDetailHeader"></div>
+        <div id="dispatchesRecipientsContainer" class="dispatches-table-wrap">
+          <div class="empty-card">Selecione um disparo para visualizar.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div id="templatesOverlay" class="templates-overlay" hidden></div>
+  <section id="templatesPanel" class="templates-panel" aria-hidden="true" hidden>
+    <header class="templates-panel-head">
+      <div>
+        <p class="panel-kicker">Meta WhatsApp</p>
+        <h2>Templates</h2>
+      </div>
+      <div class="templates-tabs" role="tablist">
+        <button type="button" class="templates-tab is-active" data-tpl-tab="list" role="tab" aria-selected="true">Aprovados / Pendentes</button>
+        <button type="button" class="templates-tab" data-tpl-tab="create" role="tab" aria-selected="false">Criar template</button>
+      </div>
+      <button type="button" class="btn btn-ghost" id="btnCloseTemplates" aria-label="Fechar">Fechar</button>
+    </header>
+
+    <div class="templates-panel-body">
+      <!-- Lista -->
+      <div class="templates-view is-active" data-tpl-view="list">
+        <div class="templates-toolbar">
+          <input type="search" id="tplSearch" class="input" placeholder="Buscar por nome..." />
+          <select id="tplStatusFilter" class="input">
+            <option value="">Todos os status</option>
+            <option value="APPROVED">Aprovados</option>
+            <option value="PENDING">Pendentes</option>
+            <option value="REJECTED">Rejeitados</option>
+            <option value="PAUSED">Pausados</option>
+          </select>
+          <button type="button" class="btn btn-ghost" id="btnReloadMetaTemplates">Recarregar</button>
+          <span id="tplCacheBadge" class="tpl-cache-badge" hidden></span>
+        </div>
+        <div id="tplListContainer" class="templates-list">
+          <div class="empty-card">Carregando templates...</div>
+        </div>
+      </div>
+
+      <!-- Criar -->
+      <div class="templates-view" data-tpl-view="create">
+        <form id="tplCreateForm" class="template-form-grid" autocomplete="off">
+          <div class="template-form-fields">
+            <fieldset class="form-fieldset">
+              <legend>Identificação</legend>
+              <label class="form-label">
+                <span>Nome do template</span>
+                <input type="text" name="name" required pattern="[a-z0-9_]{1,512}" maxlength="512" placeholder="ex.: boas_vindas_motorista" />
+                <small>Apenas minúsculas, números e underscore.</small>
+              </label>
+              <div class="form-row">
+                <label class="form-label">
+                  <span>Idioma</span>
+                  <select name="language" required>
+                    <option value="pt_BR" selected>Português (Brasil)</option>
+                    <option value="en_US">Inglês (EUA)</option>
+                    <option value="es_ES">Espanhol</option>
+                    <option value="es_MX">Espanhol (México)</option>
+                  </select>
+                </label>
+                <label class="form-label">
+                  <span>Categoria</span>
+                  <select name="category" required>
+                    <option value="MARKETING">Marketing</option>
+                    <option value="UTILITY" selected>Utilitário</option>
+                    <option value="AUTHENTICATION">Autenticação</option>
+                  </select>
+                </label>
+              </div>
+              <label class="form-label form-label--inline">
+                <input type="checkbox" name="allowCategoryChange" />
+                <span>Permitir que a Meta altere a categoria se necessário</span>
+              </label>
+            </fieldset>
+
+            <fieldset class="form-fieldset">
+              <legend>Cabeçalho</legend>
+              <label class="form-label">
+                <span>Tipo</span>
+                <select name="headerType" id="tplHeaderType">
+                  <option value="none" selected>Nenhum</option>
+                  <option value="text">Texto</option>
+                  <option value="image">Imagem</option>
+                  <option value="video">Vídeo</option>
+                  <option value="document">Documento</option>
+                  <option value="location">Localização</option>
+                </select>
+              </label>
+              <div class="header-field" data-header-when="text">
+                <label class="form-label">
+                  <span>Texto do cabeçalho (até 60 caracteres)</span>
+                  <input type="text" name="headerText" maxlength="60" />
+                </label>
+              </div>
+              <div class="header-field" data-header-when="media">
+                <label class="form-label">
+                  <span>Arquivo de exemplo</span>
+                  <input type="file" id="tplHeaderFile" />
+                  <small>Imagem (JPG/PNG até 5MB), Vídeo (MP4 até 16MB) ou Documento (PDF até 100MB).</small>
+                </label>
+                <div id="tplHeaderUploadStatus" class="upload-status" hidden></div>
+                <input type="hidden" name="headerMediaHandle" />
+                <input type="hidden" name="headerMediaUrl" />
+              </div>
+            </fieldset>
+
+            <fieldset class="form-fieldset">
+              <legend>Corpo</legend>
+              <label class="form-label">
+                <span>Mensagem (até 1024 caracteres). Clique em "Inserir variável" para adicionar campos {{1}}, {{2}}, ...</span>
+                <textarea name="bodyText" id="tplBody" rows="5" maxlength="1024" required></textarea>
+              </label>
+              <div class="form-actions-row">
+                <button type="button" class="btn btn-ghost btn-small" id="btnInsertVar">+ Inserir variável</button>
+                <span id="tplBodyCounter" class="muted-small">0 / 1024</span>
+              </div>
+              <div id="tplBodyExamples" class="examples-list" hidden>
+                <p class="examples-title">Exemplo para cada variável (obrigatório):</p>
+              </div>
+            </fieldset>
+
+            <fieldset class="form-fieldset">
+              <legend>Rodapé (opcional)</legend>
+              <label class="form-label">
+                <span>Texto do rodapé (até 60 caracteres)</span>
+                <input type="text" name="footerText" maxlength="60" />
+              </label>
+            </fieldset>
+
+            <fieldset class="form-fieldset">
+              <legend>Botões (até 10)</legend>
+              <div id="tplButtonsList" class="buttons-list"></div>
+              <div class="form-actions-row">
+                <button type="button" class="btn btn-ghost btn-small" data-add-btn="quick_reply">+ Resposta rápida</button>
+                <button type="button" class="btn btn-ghost btn-small" data-add-btn="url">+ Link (URL)</button>
+                <button type="button" class="btn btn-ghost btn-small" data-add-btn="phone_number">+ Ligar</button>
+                <button type="button" class="btn btn-ghost btn-small" data-add-btn="copy_code">+ Copiar código</button>
+              </div>
+            </fieldset>
+          </div>
+
+          <aside class="template-preview-side">
+            <p class="panel-kicker">Pré-visualização</p>
+            <div class="template-preview-phone">
+              <div class="template-preview-bubble" id="tplPreviewBubble">
+                <div class="tpl-preview-header" id="tplPreviewHeader" hidden></div>
+                <div class="tpl-preview-body" id="tplPreviewBody">Comece a escrever para visualizar...</div>
+                <div class="tpl-preview-footer" id="tplPreviewFooter" hidden></div>
+                <div class="tpl-preview-buttons" id="tplPreviewButtons"></div>
+              </div>
+            </div>
+          </aside>
+
+          <footer class="template-form-footer">
+            <button type="button" class="btn btn-ghost" id="btnCancelTpl">Cancelar</button>
+            <button type="submit" class="btn btn-primary" id="btnSubmitTpl">Enviar para aprovação</button>
+          </footer>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <script src="studio.js?v=20260506d"></script>
+</body>
+</html>

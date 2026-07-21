@@ -1,0 +1,382 @@
+/* ===========================
+   MOBILE PORTALS – Premium overrides
+   Isolado para driver.html / graphic.html
+   =========================== */
+
+/* ---- Background & body ---- */
+.mobile-body {
+  background: linear-gradient(165deg, #e8f0fe 0%, #f0f4ff 40%, #f6f7f8 100%);
+  position: relative;
+}
+.mobile-body::before {
+  content: '';
+  position: fixed;
+  top: -120px;
+  right: -80px;
+  width: 340px;
+  height: 340px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(17, 115, 212, 0.10) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+.mobile-body::after {
+  content: '';
+  position: fixed;
+  bottom: -100px;
+  left: -60px;
+  width: 280px;
+  height: 280px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(23, 178, 106, 0.08) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ---- Shell ---- */
+.mobile-shell {
+  position: relative;
+  z-index: 1;
+  padding: 18px 16px 40px;
+  gap: 16px;
+}
+
+/* ---- Header (logo + title) ---- */
+.mobile-header {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  column-gap: 12px;
+  row-gap: 4px;
+  text-align: center;
+  margin-bottom: 10px;
+  padding-top: 0;
+}
+.mobile-header-logo {
+  width: 42px;
+  height: auto;
+  margin-bottom: 0;
+  filter: drop-shadow(0 2px 6px rgba(16, 25, 34, 0.10));
+}
+.mobile-header h1 {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0;
+  margin: 0;
+  line-height: 1.12;
+  background: linear-gradient(135deg, #0d5baf 0%, #1173d4 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.mobile-header .small {
+  flex: 0 0 100%;
+  margin-top: 2px;
+  font-size: 13px;
+  color: #6b7785;
+}
+
+/* ---- Cards (glassmorphism) ---- */
+.mobile-card {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 20px;
+  box-shadow:
+    0 8px 32px rgba(16, 25, 34, 0.07),
+    0 1.5px 4px rgba(16, 25, 34, 0.04);
+  padding: 20px 18px;
+  margin-bottom: 14px;
+  transition: box-shadow 0.25s ease, transform 0.25s ease;
+  animation: portalCardIn 0.45s ease both;
+}
+.mobile-card:nth-child(2) { animation-delay: 0.08s; }
+.mobile-card:nth-child(3) { animation-delay: 0.16s; }
+
+@keyframes portalCardIn {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ---- Form inputs ---- */
+.mobile-card .form-group label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #6b7785;
+}
+.mobile-card .form-group input,
+.mobile-card .form-group select,
+.mobile-card .form-group textarea {
+  border: 1.5px solid #d6dee8;
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.85);
+  font-size: 16px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.mobile-card .form-group input:focus,
+.mobile-card .form-group select:focus,
+.mobile-card .form-group textarea:focus {
+  outline: none;
+  border-color: #1173d4;
+  box-shadow: 0 0 0 3px rgba(17, 115, 212, 0.12);
+}
+.mobile-card .form-group input::placeholder {
+  color: #a8b3c0;
+}
+
+/* ---- Primary button ---- */
+.mobile-card .btn--primary {
+  background: linear-gradient(135deg, #1173d4 0%, #0d5baf 100%);
+  color: #fff;
+  border: none;
+  border-radius: 14px;
+  padding: 14px 18px;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  box-shadow: 0 4px 14px rgba(17, 115, 212, 0.25);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.mobile-card .btn--primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 22px rgba(17, 115, 212, 0.30);
+}
+.mobile-card .btn--primary:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(17, 115, 212, 0.20);
+}
+
+/* ---- Ghost / secondary buttons ---- */
+.mobile-card .btn--ghost {
+  border: 1.5px solid #d6dee8;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(8px);
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+.mobile-card .btn--ghost:hover {
+  border-color: #1173d4;
+  background: rgba(17, 115, 212, 0.05);
+}
+
+/* ---- App header (post-login) ---- */
+.mobile-app-header {
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(214, 222, 232, 0.5);
+}
+.mobile-app-header h2 {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0;
+  color: #101922;
+}
+.mobile-app-header .small {
+  margin-top: 6px;
+  color: #6b7785;
+}
+
+/* ---- Steps ---- */
+.mobile-steps {
+  gap: 14px;
+}
+.step-item {
+  border: 1px solid rgba(214, 222, 232, 0.6);
+  border-radius: 16px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.step-item:hover {
+  border-color: rgba(17, 115, 212, 0.25);
+  box-shadow: 0 4px 16px rgba(16, 25, 34, 0.06);
+}
+
+/* ---- Step status accents ---- */
+.step-item.is-done {
+  border-left: 3px solid #17b26a;
+}
+.step-item.is-pending {
+  border-left: 3px solid #f5a524;
+}
+
+/* ---- Form message ---- */
+.form-message {
+  text-align: center;
+  font-size: 13px;
+  margin-top: 14px;
+}
+
+/* ---- Graphic agenda sidebar refinements ---- */
+.graphic-agenda-sidebar {
+  background: linear-gradient(180deg, rgba(248, 251, 255, 0.97) 0%, rgba(255, 255, 255, 0.97) 120px);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+.graphic-agenda-col {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(8px);
+  border-radius: 14px;
+}
+
+/* ---- Logout button refinement ---- */
+.mobile-app-header .btn:not(.btn--ghost):not(.btn--primary):not(.btn--danger) {
+  border: 1.5px solid #d6dee8;
+  border-radius: 10px;
+  font-size: 13px;
+  padding: 6px 14px;
+  color: #6b7785;
+  background: rgba(255, 255, 255, 0.5);
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+.mobile-app-header .btn:not(.btn--ghost):not(.btn--primary):not(.btn--danger):hover {
+  color: #e53935;
+  border-color: #e53935;
+}
+
+/* ---- select dropdown ---- */
+.mobile-card select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none'%3E%3Cpath d='M1 1.5l5 5 5-5' stroke='%236b7785' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 36px;
+}
+
+/* ═══ Driver scheduling section ═══ */
+.driver-schedule-section {
+  margin: 12px 0; padding: 12px; border-radius: 12px;
+  background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+  border: 1px solid #bbdefb;
+}
+.schedule-section-title {
+  margin: 0 0 10px; font-size: 16px; font-weight: 700; color: #1565c0;
+}
+.driver-my-bookings { margin-bottom: 10px; }
+.driver-booking-card {
+  background: #fff; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px;
+  border-left: 4px solid #43a047; box-shadow: 0 1px 3px rgba(0,0,0,.08);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.driver-booking-card.is-cancelled {
+  border-left-color: #bdbdbd; opacity: .6; text-decoration: line-through;
+}
+.booking-info .booking-type { font-weight: 700; font-size: 14px; color: #2e7d32; }
+.booking-info .booking-datetime { font-size: 13px; color: #555; }
+.booking-info .booking-graphic { font-size: 12px; color: #888; }
+.booking-cancel-btn {
+  background: #ef5350; color: #fff; border: none; border-radius: 8px;
+  padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.driver-available-slots h4 { margin: 8px 0 6px; font-size: 14px; color: #333; }
+.graphic-slot-group { margin-bottom: 16px; }
+.graphic-slot-group-name {
+  font-weight: 700; font-size: 14px; margin-bottom: 8px; color: #1565c0;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.graphic-slot-type {
+  font-size: 12px; font-weight: 600; color: #555;
+  background: #fff; border: 1px solid #cfd8dc; border-radius: 999px;
+  padding: 2px 8px;
+}
+.slot-chips {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px; margin-top: 4px;
+}
+.slot-chip {
+  background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7;
+  border-radius: 10px; padding: 10px 8px; font-size: 14px; font-weight: 700;
+  cursor: pointer; transition: transform .1s, background .15s, color .15s;
+  text-align: center; font-family: inherit;
+}
+.slot-chip:active { transform: scale(.95); }
+.slot-chip.is-selected,
+.slot-chip:hover { background: #1565c0; color: #fff; border-color: #1565c0; }
+
+/* ─── "Próximo disponível" CTA ─── */
+.next-slot-cta {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "label  when"
+    "meta   action";
+  gap: 4px 12px;
+  width: 100%;
+  background: linear-gradient(135deg, #1565c0 0%, #1e88e5 100%);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  box-shadow: 0 3px 10px rgba(21, 101, 192, .25);
+  transition: transform .1s, box-shadow .15s;
+}
+.next-slot-cta:active { transform: scale(.98); }
+.next-slot-cta:hover { box-shadow: 0 4px 14px rgba(21, 101, 192, .35); }
+.next-slot-cta__label { grid-area: label; font-size: 12px; font-weight: 600; opacity: .9; text-transform: uppercase; letter-spacing: .4px; }
+.next-slot-cta__when  { grid-area: when;  font-size: 16px; font-weight: 800; align-self: end; }
+.next-slot-cta__meta  { grid-area: meta;  font-size: 12px; opacity: .9; }
+.next-slot-cta__action{ grid-area: action;font-size: 13px; font-weight: 700; align-self: center; white-space: nowrap; }
+
+/* ─── Date pills carousel ─── */
+.date-pills-carousel {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  padding: 4px 2px 8px;
+  margin: 0 -4px;
+  scrollbar-width: none;
+}
+.date-pills-carousel::-webkit-scrollbar { display: none; }
+.date-pill {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 62px;
+  padding: 8px 6px;
+  background: #fff;
+  border: 1px solid #cfd8dc;
+  border-radius: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  position: relative;
+  transition: background .15s, border-color .15s, transform .1s;
+}
+.date-pill:active { transform: scale(.95); }
+.date-pill__weekday { font-size: 10px; font-weight: 600; color: #78909c; text-transform: uppercase; letter-spacing: .5px; }
+.date-pill__day     { font-size: 20px; font-weight: 800; color: #263238; line-height: 1.1; }
+.date-pill__month   { font-size: 10px; font-weight: 600; color: #607d8b; text-transform: uppercase; }
+.date-pill__count {
+  position: absolute; top: -4px; right: -4px;
+  background: #43a047; color: #fff;
+  font-size: 10px; font-weight: 700;
+  min-width: 18px; height: 18px;
+  border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 5px;
+  border: 2px solid #fff;
+}
+.date-pill.is-active {
+  background: #1565c0;
+  border-color: #1565c0;
+}
+.date-pill.is-active .date-pill__weekday,
+.date-pill.is-active .date-pill__day,
+.date-pill.is-active .date-pill__month { color: #fff; }
+.date-pill.is-active .date-pill__count { background: #fff; color: #1565c0; }

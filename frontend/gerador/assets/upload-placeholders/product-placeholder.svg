@@ -1,0 +1,11 @@
+<svg width="300" height="200" viewBox="0 0 300 200" xmlns="http://www.w3.org/2000/svg">
+  <rect x="1" y="1" width="298" height="198" rx="18" fill="none" stroke="#9cb4d8" stroke-width="2" stroke-dasharray="8 6" opacity="0.6"/>
+  <g opacity="0.65" fill="none" stroke="#9cb4d8" stroke-width="3">
+    <rect x="65" y="65" width="170" height="90" rx="12" fill="#e3ebfc"/>
+    <circle cx="150" cy="110" r="22" fill="#f6f9ff"/>
+    <line x1="120" y1="80" x2="180" y2="80"/>
+  </g>
+  <text x="150" y="180" font-family="Work Sans, Arial, sans-serif" font-size="18" text-anchor="middle" fill="#6882a8" opacity="0.85">
+    Mock de Produto
+  </text>
+</svg>

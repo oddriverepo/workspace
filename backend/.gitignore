@@ -1,0 +1,11 @@
+node_modules/
+dist/
+
+# Secrets
+.env
+.env.dev
+.env.prod
+
+# DataStore local (gerado em runtime — não commitar dados sensíveis)
+server/data/app-data.json
+server/data/*.json
