@@ -22,7 +22,7 @@
   // URL do backend em produção (Render.com).
   // Após o deploy, atualize com a URL real do serviço "oddrive-backend" no Render.
   // Acesse: Render Dashboard → oddrive-backend → URL do serviço
-  const PRODUCTION_BACKEND_URL = 'https://oddrive-backend.onrender.com';
+  const PRODUCTION_BACKEND_URL = 'https://oddrive-backend-hpt8.onrender.com';
 
   function normalizeUrl(url) {
     if (!url || typeof url !== 'string') return '';
