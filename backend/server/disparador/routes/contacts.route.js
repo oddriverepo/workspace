@@ -1,5 +1,6 @@
 import { Router } from "express";
 import multer from "multer";
+import { workloadGate } from "../../services/workload-manager.js";
 import { z } from "zod";
 
 import { env } from "../config.js";
@@ -103,31 +104,41 @@ router.get("/contacts", async (req, res) => {
   res.json({ ok: true, items, total: items.length });
 });
 
-router.post("/contacts/import/csv", upload.single("file"), async (req, res) => {
-  if (!req.file || !req.file.buffer) {
-    return res.status(400).json({ ok: false, error: { code: "MISSING_FILE", message: "Envie um arquivo CSV no campo 'file'." } });
-  }
-  const source = String(req.body.source || "csv_import").trim();
-  const listName = String(req.body.listName || "").trim();
-  const defaultOptIn = parseBooleanLike(req.body.defaultOptIn, null);
-  const rows = parseCsvBuffer(req.file.buffer);
-  const normalized = rows.map((row) => mapRowToNormalizedContact(row, { source, defaultOptIn }));
-  const report = await processContactBatch(normalized, { source, listName });
-  return res.json({ ok: true, report });
-});
+router.post(
+  "/contacts/import/csv",
+  workloadGate("heavy", "od-flow:import-contacts-csv"),
+  upload.single("file"),
+  async (req, res) => {
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({ ok: false, error: { code: "MISSING_FILE", message: "Envie um arquivo CSV no campo 'file'." } });
+    }
+    const source = String(req.body.source || "csv_import").trim();
+    const listName = String(req.body.listName || "").trim();
+    const defaultOptIn = parseBooleanLike(req.body.defaultOptIn, null);
+    const rows = parseCsvBuffer(req.file.buffer);
+    const normalized = rows.map((row) => mapRowToNormalizedContact(row, { source, defaultOptIn }));
+    const report = await processContactBatch(normalized, { source, listName });
+    return res.json({ ok: true, report });
+  },
+);
 
-router.post("/contacts/import/xlsx", upload.single("file"), async (req, res) => {
-  if (!req.file || !req.file.buffer) {
-    return res.status(400).json({ ok: false, error: { code: "MISSING_FILE", message: "Envie um arquivo XLSX no campo 'file'." } });
-  }
-  const source = String(req.body.source || "xlsx_import").trim();
-  const listName = String(req.body.listName || "").trim();
-  const defaultOptIn = parseBooleanLike(req.body.defaultOptIn, null);
-  const rows = await parseXlsxBuffer(req.file.buffer);
-  const normalized = rows.map((row) => mapRowToNormalizedContact(row, { source, defaultOptIn }));
-  const report = await processContactBatch(normalized, { source, listName });
-  return res.json({ ok: true, report });
-});
+router.post(
+  "/contacts/import/xlsx",
+  workloadGate("heavy", "od-flow:import-contacts-xlsx"),
+  upload.single("file"),
+  async (req, res) => {
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({ ok: false, error: { code: "MISSING_FILE", message: "Envie um arquivo XLSX no campo 'file'." } });
+    }
+    const source = String(req.body.source || "xlsx_import").trim();
+    const listName = String(req.body.listName || "").trim();
+    const defaultOptIn = parseBooleanLike(req.body.defaultOptIn, null);
+    const rows = await parseXlsxBuffer(req.file.buffer);
+    const normalized = rows.map((row) => mapRowToNormalizedContact(row, { source, defaultOptIn }));
+    const report = await processContactBatch(normalized, { source, listName });
+    return res.json({ ok: true, report });
+  },
+);
 
 const pushSchema = z.object({
   integrationKey: z.string().optional(),

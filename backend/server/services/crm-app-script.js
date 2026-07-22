@@ -1,5 +1,15 @@
+import { recordCacheEvent, recordExternalCall } from './runtime-telemetry.js';
+import { runWorkload } from './workload-manager.js';
+
 const DEFAULT_TIMEOUT_MS = 20000;
 const MAX_TIMEOUT_MS = 60000;
+const READ_CACHE_TTL_MS = Math.max(
+  5000,
+  Number.parseInt(process.env.CRM_APPS_SCRIPT_CACHE_TTL_MS || '60000', 10) || 60000,
+);
+const READ_ACTIONS = new Set(['listLeads', 'listForwarded']);
+const readCache = new Map();
+const inFlightReads = new Map();
 
 export class CrmIntegrationError extends Error {
   constructor(message, { status = 502, code = 'CRM_INTEGRATION_ERROR', details = null } = {}) {
@@ -71,21 +81,27 @@ function parseJsonResponse(text) {
   }
 }
 
-export async function callCrmAppsScript(action, payload = {}) {
-  const config = readConfig();
-  if (!config.configured) {
-    throw new CrmIntegrationError('A integracao do CRM ainda nao foi configurada no servidor.', {
-      status: 503,
-      code: 'CRM_NOT_CONFIGURED',
-    });
+function cacheGet(action) {
+  const entry = readCache.get(action);
+  if (!entry || Date.now() - entry.at >= READ_CACHE_TTL_MS) {
+    if (entry) readCache.delete(action);
+    return null;
   }
+  return entry.value;
+}
 
-  const url = validateWebAppUrl(config.url);
+function invalidateReadCache() {
+  readCache.clear();
+}
+
+async function callUpstream(action, payload, config, url) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
+  const startedAt = Date.now();
+  let ok = false;
 
   try {
-    const response = await fetch(url, {
+    const response = await runWorkload('external', `apps-script:${action}`, () => fetch(url, {
       method: 'POST',
       redirect: 'follow',
       headers: {
@@ -98,7 +114,7 @@ export async function callCrmAppsScript(action, payload = {}) {
         secret: config.secret,
       }),
       signal: controller.signal,
-    });
+    }));
 
     const text = await response.text();
     const result = parseJsonResponse(text);
@@ -118,6 +134,7 @@ export async function callCrmAppsScript(action, payload = {}) {
       );
     }
 
+    ok = true;
     return result;
   } catch (error) {
     if (error instanceof CrmIntegrationError) throw error;
@@ -132,5 +149,39 @@ export async function callCrmAppsScript(action, payload = {}) {
     });
   } finally {
     clearTimeout(timeout);
+    recordExternalCall('Google Apps Script', { durationMs: Date.now() - startedAt, ok });
   }
+}
+
+export async function callCrmAppsScript(action, payload = {}) {
+  const config = readConfig();
+  if (!config.configured) {
+    throw new CrmIntegrationError('A integracao do CRM ainda nao foi configurada no servidor.', {
+      status: 503,
+      code: 'CRM_NOT_CONFIGURED',
+    });
+  }
+  const url = validateWebAppUrl(config.url);
+
+  if (READ_ACTIONS.has(action)) {
+    const cached = cacheGet(action);
+    if (cached) {
+      recordCacheEvent(`Apps Script - ${action}`, true);
+      return cached;
+    }
+    recordCacheEvent(`Apps Script - ${action}`, false);
+    if (inFlightReads.has(action)) return inFlightReads.get(action);
+    const promise = callUpstream(action, payload, config, url)
+      .then((result) => {
+        readCache.set(action, { value: result, at: Date.now() });
+        return result;
+      })
+      .finally(() => inFlightReads.delete(action));
+    inFlightReads.set(action, promise);
+    return promise;
+  }
+
+  const result = await callUpstream(action, payload, config, url);
+  invalidateReadCache();
+  return result;
 }

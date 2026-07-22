@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import ExcelJS from 'exceljs';
 import { z } from 'zod';
 
 import { fetchDrivers, restoreCampaignDriver } from '../services/db.js';
@@ -19,6 +18,7 @@ import { logAudit } from '../middleware/audit.js';
 import { loadLegacyDb } from '../services/legacyStore.js';
 import { createDispatchRun, completeDispatchRun } from '../disparador/services/mongo/dispatch-runs.repo.js';
 import { upsertRecipient as upsertCampaignRecipient } from '../disparador/services/mongo/campaign-recipients.repo.js';
+import { runWorkload } from '../services/workload-manager.js';
 
 const router = Router();
 router.use(authenticateAdmin);
@@ -339,41 +339,46 @@ router.post('/export', async (req, res) => {
     const rows = parsed.data.rows.map(buildDriverExportRow);
     const filename = sanitizeExportFilename(`motoristas_oddrive_${exportTimestamp()}`) + '.xlsx';
 
-    const workbook = new ExcelJS.Workbook();
-    workbook.creator = 'OD Drive';
-    workbook.created = new Date();
-    workbook.modified = new Date();
-
-    const sheet = workbook.addWorksheet('Motoristas', {
-      views: [{ state: 'frozen', ySplit: 1 }],
-    });
-    sheet.columns = DRIVER_EXPORT_COLUMNS;
-    sheet.autoFilter = {
-      from: { row: 1, column: 1 },
-      to: { row: 1, column: DRIVER_EXPORT_COLUMNS.length },
-    };
-
-    const headerRow = sheet.getRow(1);
-    headerRow.height = 22;
-    headerRow.eachCell((cell) => {
-      cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F766E' } };
-      cell.alignment = { vertical: 'middle' };
-      cell.border = { bottom: { style: 'thin', color: { argb: 'FF99F6E4' } } };
-    });
-
-    for (const row of rows) {
-      const excelRow = sheet.addRow(row);
-      excelRow.eachCell((cell) => {
-        cell.alignment = { vertical: 'top' };
+    await runWorkload('heavy', 'drivers:export', async () => {
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
+      res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+      const { default: ExcelJS } = await import('exceljs');
+      const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
+        stream: res,
+        useStyles: true,
+        useSharedStrings: false,
       });
-    }
+      workbook.creator = 'OD Drive';
+      workbook.created = new Date();
+      workbook.modified = new Date();
 
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
-    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
-    await workbook.xlsx.write(res);
-    res.end();
+      const sheet = workbook.addWorksheet('Motoristas', {
+        views: [{ state: 'frozen', ySplit: 1 }],
+      });
+      sheet.columns = DRIVER_EXPORT_COLUMNS;
+      sheet.autoFilter = {
+        from: { row: 1, column: 1 },
+        to: { row: 1, column: DRIVER_EXPORT_COLUMNS.length },
+      };
+      const headerRow = sheet.getRow(1);
+      headerRow.height = 22;
+      headerRow.eachCell((cell) => {
+        cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F766E' } };
+        cell.alignment = { vertical: 'middle' };
+        cell.border = { bottom: { style: 'thin', color: { argb: 'FF99F6E4' } } };
+      });
+      headerRow.commit();
+
+      for (const row of rows) {
+        const excelRow = sheet.addRow(row);
+        excelRow.eachCell((cell) => { cell.alignment = { vertical: 'top' }; });
+        excelRow.commit();
+      }
+      sheet.commit();
+      await workbook.commit();
+    });
   } catch (err) {
     console.error('[drivers] export error:', err);
     if (!res.headersSent) {

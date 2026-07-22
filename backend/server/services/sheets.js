@@ -1,17 +1,26 @@
-import { google } from 'googleapis';
+let googleContextPromise = null;
 
-const auth = new google.auth.GoogleAuth({
-  credentials: {
-    client_email: process.env.GOOGLE_CLIENT_EMAIL,
-    private_key: (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
-  },
-  scopes: [
-    'https://www.googleapis.com/auth/spreadsheets',
-    'https://www.googleapis.com/auth/drive',
-  ],
-});
+function getGoogleContext() {
+  if (!googleContextPromise) {
+    googleContextPromise = import('googleapis').then(({ google }) => ({
+      google,
+      auth: new google.auth.GoogleAuth({
+        credentials: {
+          client_email: process.env.GOOGLE_CLIENT_EMAIL,
+          private_key: (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+        },
+        scopes: [
+          'https://www.googleapis.com/auth/spreadsheets',
+          'https://www.googleapis.com/auth/drive',
+        ],
+      }),
+    }));
+  }
+  return googleContextPromise;
+}
 
 async function getSheetsClient() {
+  const { google, auth } = await getGoogleContext();
   return google.sheets({ version: 'v4', auth: await auth.getClient() });
 }
 

@@ -16,6 +16,7 @@
 
 import { getDb } from './mongo.js';
 import { normalizeName } from '../lib/normalize.js';
+import { recordCacheEvent } from './runtime-telemetry.js';
 
 const COL_CAMPAIGNS = 'api_campaigns';
 const COL_DRIVERS   = 'api_drivers';
@@ -33,12 +34,15 @@ const _cache = {
   campaigns: { data: null, at: 0 },
   drivers:   { data: null, at: 0 },
 };
+const _inFlight = { campaigns: null, drivers: null };
+let _cacheGeneration = 0;
 
 function _isFresh(entry) {
   return entry.data !== null && (Date.now() - entry.at) < READ_CACHE_TTL_MS;
 }
 
 function invalidateReadCache() {
+  _cacheGeneration += 1;
   _cache.campaigns.data = null;
   _cache.drivers.data   = null;
 }
@@ -51,11 +55,20 @@ function invalidateReadCache() {
  * Lê todas as campanhas do MongoDB (com cache em memória).
  */
 export async function readCampaigns() {
-  if (_isFresh(_cache.campaigns)) return _cache.campaigns.data;
-  const db = await getDb();
-  const data = await db.collection(COL_CAMPAIGNS).find({}).toArray();
-  _cache.campaigns = { data, at: Date.now() };
-  return data;
+  if (_isFresh(_cache.campaigns)) {
+    recordCacheEvent('MongoDB - campanhas', true);
+    return _cache.campaigns.data;
+  }
+  recordCacheEvent('MongoDB - campanhas', false);
+  if (_inFlight.campaigns) return _inFlight.campaigns;
+  const generation = _cacheGeneration;
+  _inFlight.campaigns = (async () => {
+    const db = await getDb();
+    const data = await db.collection(COL_CAMPAIGNS).find({}).toArray();
+    if (generation === _cacheGeneration) _cache.campaigns = { data, at: Date.now() };
+    return data;
+  })().finally(() => { _inFlight.campaigns = null; });
+  return _inFlight.campaigns;
 }
 
 /**
@@ -70,11 +83,20 @@ export async function readCampaignById(campaignId) {
  * Lê todos os motoristas do MongoDB (com cache em memória).
  */
 export async function readDrivers() {
-  if (_isFresh(_cache.drivers)) return _cache.drivers.data;
-  const db = await getDb();
-  const data = await db.collection(COL_DRIVERS).find({}).toArray();
-  _cache.drivers = { data, at: Date.now() };
-  return data;
+  if (_isFresh(_cache.drivers)) {
+    recordCacheEvent('MongoDB - motoristas', true);
+    return _cache.drivers.data;
+  }
+  recordCacheEvent('MongoDB - motoristas', false);
+  if (_inFlight.drivers) return _inFlight.drivers;
+  const generation = _cacheGeneration;
+  _inFlight.drivers = (async () => {
+    const db = await getDb();
+    const data = await db.collection(COL_DRIVERS).find({}).toArray();
+    if (generation === _cacheGeneration) _cache.drivers = { data, at: Date.now() };
+    return data;
+  })().finally(() => { _inFlight.drivers = null; });
+  return _inFlight.drivers;
 }
 
 /**

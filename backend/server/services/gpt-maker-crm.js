@@ -1,5 +1,7 @@
 import crypto from 'crypto';
 import { getDb } from './mongoClient.js';
+import { recordCacheEvent, recordExternalCall } from './runtime-telemetry.js';
+import { runWorkload } from './workload-manager.js';
 
 const CHAT_COLLECTION = 'gptmaker_crm_chats';
 const INTERACTION_COLLECTION = 'gptmaker_crm_interactions';
@@ -220,15 +222,17 @@ async function fetchPage(resource, page, config) {
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
+  const startedAt = Date.now();
+  let ok = false;
   try {
-    const response = await fetch(url, {
+    const response = await runWorkload('external', `gptmaker:${resource}`, () => fetch(url, {
       method: 'GET',
       headers: {
         Accept: 'application/json',
         Authorization: `Bearer ${config.token}`,
       },
       signal: controller.signal,
-    });
+    }));
     const text = await response.text();
     let payload = {};
     try {
@@ -246,6 +250,7 @@ async function fetchPage(resource, page, config) {
           : 'GPTMAKER_UPSTREAM_ERROR',
       });
     }
+    ok = true;
     return extractItems(payload);
   } catch (error) {
     if (error instanceof GptMakerCrmError) throw error;
@@ -260,6 +265,7 @@ async function fetchPage(resource, page, config) {
     });
   } finally {
     clearTimeout(timeout);
+    recordExternalCall('GPT Maker API', { durationMs: Date.now() - startedAt, ok });
   }
 }
 
@@ -666,9 +672,16 @@ export async function getGptMakerInstagramSummary({ from, to, force = false }) {
   }
   if (!force) {
     const cached = cacheGet(key, config.cacheTtlMs);
-    if (cached) return { ...cached, freshness: { ...cached.freshness, source: 'memory-cache', apiCalls: 0 } };
+    if (cached) {
+      recordCacheEvent('GPT Maker - CRM', true);
+      return { ...cached, freshness: { ...cached.freshness, source: 'memory-cache', apiCalls: 0 } };
+    }
+    recordCacheEvent('GPT Maker - CRM', false);
   }
-  if (inFlight.has(key)) return inFlight.get(key);
+  if (inFlight.has(key)) {
+    recordCacheEvent('GPT Maker - requisicao compartilhada', true);
+    return inFlight.get(key);
+  }
 
   const promise = (async () => {
     const db = await getDb();

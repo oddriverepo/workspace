@@ -1,7 +1,6 @@
 import { Router, json as jsonParser } from 'express';
 import crypto from 'crypto';
 import { nanoid } from 'nanoid';
-import ExcelJS from 'exceljs';
 import { STATUS, normalizeStatus, normalizeName } from '../lib/normalize.js';
 import { buildDriversFromRows, resolveSheetName } from '../lib/campaignImport.js';
 import {
@@ -61,6 +60,7 @@ import { applyDriverKmSummary, parseKmNumber } from '../lib/driverKm.js';
 import { DRIVER_FLOW, GRAPHIC_FLOW, DRIVER_REQUIRED_STEPS, GRAPHIC_REQUIRED_STEPS } from '../lib/flows.js';
 import { authenticateAdmin } from '../middleware/authenticate-admin.js';
 import { logAudit } from '../middleware/audit.js';
+import { runWorkload } from '../services/workload-manager.js';
 import { ensureLegacyStoreReady, loadLegacyDb, saveLegacyDb } from '../services/legacyStore.js';
 import { dispatchDriverCampaignMessage } from '../services/driver-outreach.js';
 import { listTemplates, getTemplateById } from '../disparador/store/memory-store.js';
@@ -3115,23 +3115,26 @@ router.get('/:id/export/drivers', async (req, res) => {
       }
       res.end();
     } else {
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.setHeader('Content-Disposition', `attachment; filename="${filenameBase}.xlsx"`);
-      const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ stream: res, useStyles: true });
-      const sheet = workbook.addWorksheet('Motoristas');
-      sheet.columns = EXPORT_COLUMNS;
-      sheet.getRow(1).font = { bold: true };
-      sheet.getRow(1).commit();
-      for (const driver of drivers) {
-        const row = buildExportRow(driver, campaign);
-        // Sanitiza strings contra CSV injection (numeros passam direto)
-        for (const key of Object.keys(row)) {
-          if (typeof row[key] === 'string') row[key] = neutralizeCellFormula(row[key]);
+      await runWorkload('heavy', 'campaigns:export-drivers', async () => {
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="${filenameBase}.xlsx"`);
+        const { default: ExcelJS } = await import('exceljs');
+        const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ stream: res, useStyles: true });
+        const sheet = workbook.addWorksheet('Motoristas');
+        sheet.columns = EXPORT_COLUMNS;
+        sheet.getRow(1).font = { bold: true };
+        sheet.getRow(1).commit();
+        for (const driver of drivers) {
+          const row = buildExportRow(driver, campaign);
+          // Sanitiza strings contra CSV injection (numeros passam direto)
+          for (const key of Object.keys(row)) {
+            if (typeof row[key] === 'string') row[key] = neutralizeCellFormula(row[key]);
+          }
+          sheet.addRow(row).commit();
         }
-        sheet.addRow(row).commit();
-      }
-      sheet.commit();
-      await workbook.commit();
+        sheet.commit();
+        await workbook.commit();
+      });
     }
 
     // 6) Auditoria (apos enviar resposta)

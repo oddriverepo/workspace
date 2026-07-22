@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { authenticateAdmin } from '../middleware/authenticate-admin.js';
+import { workloadGate } from '../services/workload-manager.js';
 import {
   createMetaTemplate,
   deleteMetaTemplate,
@@ -120,27 +121,32 @@ router.delete('/:name', async (req, res) => {
  * Faz upload de imagem/video/documento usando Resumable Upload API.
  * Retorna { handle } para usar em createMetaTemplate({ headerMediaHandle }).
  */
-router.post('/upload-media', upload.single('file'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ ok: false, error: 'Arquivo obrigatorio (campo "file").' });
-    }
-    if (!ACCEPTED_MIME.has(req.file.mimetype)) {
-      return res.status(400).json({
-        ok: false,
-        error: `Tipo de arquivo nao suportado: ${req.file.mimetype}. Aceitos: JPG, PNG, MP4, 3GPP, PDF.`,
+router.post(
+  '/upload-media',
+  workloadGate('heavy', 'meta-templates:upload-media'),
+  upload.single('file'),
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ ok: false, error: 'Arquivo obrigatorio (campo "file").' });
+      }
+      if (!ACCEPTED_MIME.has(req.file.mimetype)) {
+        return res.status(400).json({
+          ok: false,
+          error: `Tipo de arquivo nao suportado: ${req.file.mimetype}. Aceitos: JPG, PNG, MP4, 3GPP, PDF.`,
+        });
+      }
+      const result = await uploadTemplateMedia({
+        fileBuffer: req.file.buffer,
+        fileLength: req.file.size,
+        fileName: req.file.originalname,
+        fileType: req.file.mimetype,
       });
+      res.json({ ok: true, data: result });
+    } catch (err) {
+      safeError(res, err);
     }
-    const result = await uploadTemplateMedia({
-      fileBuffer: req.file.buffer,
-      fileLength: req.file.size,
-      fileName: req.file.originalname,
-      fileType: req.file.mimetype,
-    });
-    res.json({ ok: true, data: result });
-  } catch (err) {
-    safeError(res, err);
-  }
-});
+  },
+);
 
 export default router;

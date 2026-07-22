@@ -1,5 +1,7 @@
 import crypto from 'crypto';
 import { getDb } from './mongoClient.js';
+import { recordCacheEvent, recordExternalCall } from './runtime-telemetry.js';
+import { runWorkload } from './workload-manager.js';
 import {
   META_ADS_METRIC_VERSION,
   META_ADS_TIME_ZONE,
@@ -152,12 +154,14 @@ function parseUsageHeader(value) {
 async function fetchGraphUrl(url, config, attempt = 0) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
+  const startedAt = Date.now();
+  let ok = false;
   try {
-    const response = await fetch(url, {
+    const response = await runWorkload('external', 'meta-graph', () => fetch(url, {
       method: 'GET',
       headers: { Accept: 'application/json' },
       signal: controller.signal,
-    });
+    }));
     const text = await response.text();
     let payload = {};
     try {
@@ -190,6 +194,7 @@ async function fetchGraphUrl(url, config, attempt = 0) {
       });
     }
 
+    ok = true;
     return {
       payload,
       usage: {
@@ -211,6 +216,7 @@ async function fetchGraphUrl(url, config, attempt = 0) {
     });
   } finally {
     clearTimeout(timeout);
+    recordExternalCall('Meta Graph API', { durationMs: Date.now() - startedAt, ok });
   }
 }
 
@@ -767,14 +773,19 @@ export async function getMetaAdsDashboard(input) {
   if (!force) {
     const cached = cacheGet(key, request.config.cacheTtlMs);
     if (cached) {
+      recordCacheEvent('Meta Ads - painel', true);
       return {
         ...cached,
         freshness: { ...cached.freshness, source: 'memory-cache', synchronized: false, metaCalls: 0 },
       };
     }
+    recordCacheEvent('Meta Ads - painel', false);
   }
 
-  if (inFlightDashboards.has(key)) return inFlightDashboards.get(key);
+  if (inFlightDashboards.has(key)) {
+    recordCacheEvent('Meta Ads - requisicao compartilhada', true);
+    return inFlightDashboards.get(key);
+  }
   const promise = loadDashboard(request, force)
     .then((result) => {
       cacheSet(key, result);

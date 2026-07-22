@@ -200,8 +200,11 @@ app.use(cors({
 const bodyLimit = process.env.JSON_BODY_LIMIT || '10mb';
 app.use(express.json({
   limit: bodyLimit,
-  // Preserve raw body for Meta webhook HMAC signature validation
-  verify: (req, _res, buf) => { req.rawBody = buf; },
+  // O corpo bruto so e necessario para validar a assinatura do webhook da Meta.
+  verify: (req, _res, buf) => {
+    const requestPath = String(req.originalUrl || '').split('?')[0];
+    if (requestPath === '/api/disparador/webhooks/meta/whatsapp') req.rawBody = buf;
+  },
 }));
 app.use(express.urlencoded({ extended: true, limit: bodyLimit }));
 
@@ -505,7 +508,9 @@ app.use((err, req, res, _next) => {
     res.setHeader('Access-Control-Allow-Credentials', 'true');
   }
   const status = err.status || err.statusCode || 500;
-  const safeMessage = status >= 500 ? 'Erro interno do servidor.' : (err.message || 'Erro na requisição.');
+  const safeMessage = status >= 500 && err?.expose !== true
+    ? 'Erro interno do servidor.'
+    : (err.message || 'Erro na requisição.');
   if (!res.headersSent) {
     res.status(status).json({ error: safeMessage });
   }

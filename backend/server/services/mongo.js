@@ -12,6 +12,8 @@ const MONGO_URI = getEnv('MONGO_URI');
 const MONGO_DB_NAME = getEnv('MONGO_DB_NAME', 'odrive_app');
 const MONGO_TLS_ALLOW_INVALID_CERTS = getEnv('MONGO_TLS_ALLOW_INVALID_CERTS', '0') === '1';
 const MONGO_TLS_CA_FILE = getEnv('MONGO_TLS_CA_FILE');
+const MONGO_MAX_POOL_SIZE = Math.max(2, Number.parseInt(getEnv('MONGO_MAX_POOL_SIZE', '8'), 10) || 8);
+const MONGO_MIN_POOL_SIZE = Math.max(0, Number.parseInt(getEnv('MONGO_MIN_POOL_SIZE', '0'), 10) || 0);
 const STORAGE_COLLECTION = 'storage_files';
 const CAMPAIGNS_COLLECTION = 'campaigns';
 const DRIVERS_COLLECTION = 'drivers';
@@ -48,8 +50,8 @@ async function getDb() {
       serverSelectionTimeoutMS: 30000,
       socketTimeoutMS: 60000,
       connectTimeoutMS: 30000,
-      maxPoolSize: 10,
-      minPoolSize: 2,
+      maxPoolSize: MONGO_MAX_POOL_SIZE,
+      minPoolSize: Math.min(MONGO_MIN_POOL_SIZE, MONGO_MAX_POOL_SIZE),
       maxIdleTimeMS: 60000,
       retryWrites: true,
       retryReads: true,

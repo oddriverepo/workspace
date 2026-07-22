@@ -5,10 +5,15 @@
 import { Router } from 'express';
 import { createRequire } from 'module';
 import { authenticateAdmin } from '../middleware/authenticate-admin.js';
+import { runWorkload } from '../services/workload-manager.js';
 
 // generator.js usa require() internamente, então importamos via createRequire
 const require = createRequire(import.meta.url);
-const GoogleSlidesGenerator = require('../lib/google/generator.cjs');
+let GoogleSlidesGenerator = null;
+function getGoogleSlidesGenerator() {
+  if (!GoogleSlidesGenerator) GoogleSlidesGenerator = require('../lib/google/generator.cjs');
+  return GoogleSlidesGenerator;
+}
 
 function escapeHtml(value = '') {
   return String(value)
@@ -49,15 +54,18 @@ export function buildSlidesRouter(store, googleAuthService) {
         const payload = await googleAuthService.refreshToken();
         return payload.access_token;
       };
-      const generator = new GoogleSlidesGenerator(accessToken, configOverrides, { tokenRefresher });
+      const Generator = getGoogleSlidesGenerator();
+      const generator = new Generator(accessToken, configOverrides, { tokenRefresher });
       const progressTrail = [];
-      const result = await generator.generateProposal(
-        proposalData,
-        (progress, message) => {
-          progressTrail.push({ progress, message });
-        },
-        options || {}
-      );
+      const result = await runWorkload('heavy', 'slides:generate', () => (
+        generator.generateProposal(
+          proposalData,
+          (progress, message) => {
+            progressTrail.push({ progress, message });
+          },
+          options || {},
+        )
+      ));
 
       res.json({ success: true, ...result, progress: progressTrail });
     } catch (error) {
@@ -86,8 +94,11 @@ export function buildSlidesRouter(store, googleAuthService) {
         const payload = await googleAuthService.refreshToken();
         return payload.access_token;
       };
-      const generator = new GoogleSlidesGenerator(accessToken, configOverrides, { tokenRefresher });
-      const buffer = await generator.client.exportPresentationPdf(presentationId);
+      const Generator = getGoogleSlidesGenerator();
+      const generator = new Generator(accessToken, configOverrides, { tokenRefresher });
+      const buffer = await runWorkload('heavy', 'slides:export-pdf', () => (
+        generator.client.exportPresentationPdf(presentationId)
+      ));
       const fileName = `proposta-${proposalId || Date.now()}.pdf`;
 
       res.json({

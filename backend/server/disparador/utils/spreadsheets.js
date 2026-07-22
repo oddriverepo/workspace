@@ -1,5 +1,4 @@
 import { parse } from "csv-parse/sync";
-import ExcelJS from "exceljs";
 
 export function parseCsvBuffer(buffer) {
   const content = buffer.toString("utf8");
@@ -12,6 +11,7 @@ export function parseCsvBuffer(buffer) {
 }
 
 export async function parseXlsxBuffer(buffer) {
+  const { default: ExcelJS } = await import("exceljs");
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer);
 

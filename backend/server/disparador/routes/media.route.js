@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { GridFSBucket } from "mongodb";
 import { env } from "../config.js";
 import { getDb, getStorageFileMetadata, openStorageFileStream } from "../../services/mongo.js";
+import { workloadGate } from "../../services/workload-manager.js";
 
 const router = Router();
 const STORAGE_COLLECTION = "storage_files";
@@ -46,20 +47,24 @@ function isPublicDisparadorMedia(file = {}) {
 }
 
 // ── POST /media/upload — authenticated (behind authenticateAdmin) ──
-router.post("/media/upload", upload.single("image"), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ ok: false, error: { code: "NO_FILE", message: "Nenhuma imagem enviada." } });
-    }
+router.post(
+  "/media/upload",
+  workloadGate("heavy", "od-flow:upload-media"),
+  upload.single("image"),
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ ok: false, error: { code: "NO_FILE", message: "Nenhuma imagem enviada." } });
+      }
 
-  const { buffer, mimetype, originalname } = req.file;
-  const templateId = normalizeOptionalField(req.body?.templateId);
-  const templateName = normalizeOptionalField(req.body?.templateName);
-  const flowId = normalizeOptionalField(req.body?.flowId);
-    const ext = (mimetype.split("/")[1] || "jpg").toLowerCase();
-    const fileId = randomUUID();
-    const fileName = `flow-media-${fileId}.${ext}`;
-    const objectPath = `disparador/media/${fileName}`;
+      const { buffer, mimetype, originalname } = req.file;
+      const templateId = normalizeOptionalField(req.body?.templateId);
+      const templateName = normalizeOptionalField(req.body?.templateName);
+      const flowId = normalizeOptionalField(req.body?.flowId);
+      const ext = (mimetype.split("/")[1] || "jpg").toLowerCase();
+      const fileId = randomUUID();
+      const fileName = `flow-media-${fileId}.${ext}`;
+      const objectPath = `disparador/media/${fileName}`;
 
     const bucket = await getBucket();
     const uploadStream = bucket.openUploadStream(objectPath, {
@@ -99,24 +104,25 @@ router.post("/media/upload", upload.single("image"), async (req, res) => {
     };
     await database.collection(STORAGE_COLLECTION).insertOne(storageDoc);
 
-    return res.json({
-      ok: true,
-      file: {
-        id: gridFsId.toString(),
-        url: storageDoc.url,
-        fileName,
-        mimeType: mimetype,
-        size: buffer.length,
-      },
-    });
-  } catch (err) {
-    console.error("[MEDIA_UPLOAD] Error:", err?.message || err);
-    if (err.code === "INVALID_FILE_TYPE") {
-      return res.status(400).json({ ok: false, error: { code: err.code, message: err.message } });
+      return res.json({
+        ok: true,
+        file: {
+          id: gridFsId.toString(),
+          url: storageDoc.url,
+          fileName,
+          mimeType: mimetype,
+          size: buffer.length,
+        },
+      });
+    } catch (err) {
+      console.error("[MEDIA_UPLOAD] Error:", err?.message || err);
+      if (err.code === "INVALID_FILE_TYPE") {
+        return res.status(400).json({ ok: false, error: { code: err.code, message: err.message } });
+      }
+      return res.status(500).json({ ok: false, error: { code: "UPLOAD_FAILED", message: "Falha ao fazer upload da imagem." } });
     }
-    return res.status(500).json({ ok: false, error: { code: "UPLOAD_FAILED", message: "Falha ao fazer upload da imagem." } });
-  }
-});
+  },
+);
 
 // ── Public router (no auth) — serves media so Meta WhatsApp API can fetch ──
 const publicMediaRouter = Router();

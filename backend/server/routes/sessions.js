@@ -27,6 +27,7 @@ import {
 } from '../services/db.js';
 import { ensureLegacyStoreReady, loadLegacyDb, saveLegacyDb } from '../services/legacyStore.js';
 import { createUserSession, deleteUserSession, getUserSession } from '../services/sessionStore.js';
+import { workloadGate } from '../services/workload-manager.js';
 import { validateDriverLogin, validateGraphicLogin, validateBase64Image } from '../middleware/validators.js';
 
 const DETAILED_GRAPHIC_ERRORS = process.env.DETAILED_GRAPHIC_ERRORS === '1';
@@ -1266,7 +1267,12 @@ router.get('/graphic/drivers', authenticateSession, async (req, res) => {
 });
 
 // Recebe evidências do motorista (foto e/ou valor do odômetro) e persiste no db.json
-router.post('/evidence', authenticateSession, validateBase64Image, async (req, res) => {
+router.post(
+  '/evidence',
+  authenticateSession,
+  workloadGate('heavy', 'portal:evidence-upload'),
+  validateBase64Image,
+  async (req, res) => {
   const { db, session } = req.sessionContext;
   if (session.role === 'driver') {
 
@@ -1746,6 +1752,7 @@ router.post('/evidence', authenticateSession, validateBase64Image, async (req, r
 
   saveDB(db);
   return res.status(201).json({ ok: true, id, url: photoUrl });
-});
+  },
+);
 
 export default router;
