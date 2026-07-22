@@ -31,10 +31,17 @@ const COL_SYNC_LOG  = 'api_sync_log';
 const READ_CACHE_TTL_MS = 90_000; // 90 segundos
 
 const _cache = {
-  campaigns: { data: null, at: 0 },
-  drivers:   { data: null, at: 0 },
+  campaigns:        { data: null, at: 0 },
+  campaignSummaries: { data: null, at: 0 },
+  drivers:          { data: null, at: 0 },
+  driverStats:      { data: null, at: 0 },
 };
-const _inFlight = { campaigns: null, drivers: null };
+const _inFlight = {
+  campaigns: null,
+  campaignSummaries: null,
+  drivers: null,
+  driverStats: null,
+};
 let _cacheGeneration = 0;
 
 function _isFresh(entry) {
@@ -44,7 +51,9 @@ function _isFresh(entry) {
 function invalidateReadCache() {
   _cacheGeneration += 1;
   _cache.campaigns.data = null;
+  _cache.campaignSummaries.data = null;
   _cache.drivers.data   = null;
+  _cache.driverStats.data = null;
 }
 
 // ══════════════════════════════════════════
@@ -72,11 +81,91 @@ export async function readCampaigns() {
 }
 
 /**
- * Lê uma campanha por ID (derivado do cache de campanhas).
+ * Le somente os campos usados pela listagem do Gerenciador de Campanhas.
+ * Dados pesados da campanha continuam sendo buscados por ID ao abrir o detalhe.
+ */
+export async function readCampaignSummaries() {
+  if (_isFresh(_cache.campaignSummaries)) {
+    recordCacheEvent('MongoDB - resumo de campanhas', true);
+    return _cache.campaignSummaries.data;
+  }
+  recordCacheEvent('MongoDB - resumo de campanhas', false);
+  if (_inFlight.campaignSummaries) return _inFlight.campaignSummaries;
+
+  const generation = _cacheGeneration;
+  _inFlight.campaignSummaries = (async () => {
+    const db = await getDb();
+    const data = await db.collection(COL_CAMPAIGNS).find({}, {
+      projection: {
+        _id: 1,
+        id: 1,
+        name: 1,
+        client: 1,
+        status: 1,
+        period: 1,
+        'apiData.city': 1,
+        'apiData.state': 1,
+        'apiData.metaKms': 1,
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    }).toArray();
+    if (generation === _cacheGeneration) {
+      _cache.campaignSummaries = { data, at: Date.now() };
+    }
+    return data;
+  })().finally(() => { _inFlight.campaignSummaries = null; });
+
+  return _inFlight.campaignSummaries;
+}
+
+/**
+ * Conta motoristas por campanha/status dentro do MongoDB. A aplicacao recebe
+ * apenas os grupos consolidados, sem materializar todos os motoristas.
+ */
+export async function readCampaignDriverStats() {
+  if (_isFresh(_cache.driverStats)) {
+    recordCacheEvent('MongoDB - contagens de motoristas por campanha', true);
+    return _cache.driverStats.data;
+  }
+  recordCacheEvent('MongoDB - contagens de motoristas por campanha', false);
+  if (_inFlight.driverStats) return _inFlight.driverStats;
+
+  const generation = _cacheGeneration;
+  _inFlight.driverStats = (async () => {
+    const db = await getDb();
+    const data = await db.collection(COL_DRIVERS).aggregate([
+      { $match: { campaignId: { $gt: '' } } },
+      {
+        $group: {
+          _id: {
+            campaignId: '$campaignId',
+            status: { $ifNull: ['$status', 'cadastrando'] },
+          },
+          count: { $sum: 1 },
+        },
+      },
+    ]).toArray();
+    if (generation === _cacheGeneration) {
+      _cache.driverStats = { data, at: Date.now() };
+    }
+    return data;
+  })().finally(() => { _inFlight.driverStats = null; });
+
+  return _inFlight.driverStats;
+}
+
+/**
+ * Le uma campanha por ID sem carregar a colecao inteira.
  */
 export async function readCampaignById(campaignId) {
-  const all = await readCampaigns();
-  return all.find(c => c._id === campaignId || c.id === campaignId) ?? null;
+  if (_isFresh(_cache.campaigns)) {
+    return _cache.campaigns.data.find(c => c._id === campaignId || c.id === campaignId) ?? null;
+  }
+  const db = await getDb();
+  const collection = db.collection(COL_CAMPAIGNS);
+  const campaign = await collection.findOne({ _id: campaignId });
+  return campaign || collection.findOne({ id: campaignId });
 }
 
 /**
@@ -100,11 +189,42 @@ export async function readDrivers() {
 }
 
 /**
- * Lê motoristas de uma campanha específica (derivado do cache global).
+ * Le somente os motoristas da campanha solicitada.
  */
 export async function readDriversByCampaign(campaignId) {
-  const all = await readDrivers();
-  return all.filter(d => d.campaignId === campaignId);
+  if (_isFresh(_cache.drivers)) {
+    return _cache.drivers.data.filter(d => d.campaignId === campaignId);
+  }
+  const db = await getDb();
+  return db.collection(COL_DRIVERS).find({ campaignId }).toArray();
+}
+
+/**
+ * Le os campos minimos dos motoristas usados para validar desvinculacoes nas
+ * contagens agregadas da listagem.
+ */
+export async function readDriverAssignmentsByIds(driverIds = []) {
+  const ids = Array.from(new Set(
+    (Array.isArray(driverIds) ? driverIds : [driverIds])
+      .map(value => String(value || '').trim())
+      .filter(Boolean),
+  ));
+  if (!ids.length) return [];
+
+  const db = await getDb();
+  return db.collection(COL_DRIVERS).find(
+    { _id: { $in: ids } },
+    {
+      projection: {
+        _id: 1,
+        id: 1,
+        campaignId: 1,
+        status: 1,
+        driverCampaignId: 1,
+        'campaignData.driverCampaignId': 1,
+      },
+    },
+  ).toArray();
 }
 
 /**
@@ -334,6 +454,7 @@ export async function ensureSyncIndexes() {
     const db = await getDb();
     await db.collection(COL_CAMPAIGNS).createIndex({ status: 1 });
     await db.collection(COL_DRIVERS).createIndex({ campaignId: 1 });
+    await db.collection(COL_DRIVERS).createIndex({ campaignId: 1, status: 1 });
     await db.collection(COL_DRIVERS).createIndex({ nameKey: 1 });
     await db.collection(COL_DRIVERS).createIndex({ phoneSuffix: 1 });
     await db.collection(COL_SYNC_LOG).createIndex({ timestamp: -1 });

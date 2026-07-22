@@ -42,6 +42,8 @@ import {
   getUploadHeatmapByCampaign,
   listCampaignHistory,
   fetchCampaigns,
+  fetchCampaignSummaries,
+  fetchCampaignDriverStats,
   fetchCampaignById,
   fetchDrivers,
   fetchDriversByCampaign,
@@ -667,6 +669,46 @@ function mergeCampaignWithLocal(apiCampaign, localCampaign, db) {
   return base;
 }
 
+function buildCampaignListItem(campaign, {
+  localCampaign = null,
+  driverStats = null,
+  settings = null,
+  reviewCount = 0,
+} = {}) {
+  const id = String(campaign?.id || campaign?._id || '').trim();
+  const apiData = campaign?.apiData || {};
+  const counts = {};
+  for (const status of STATUS) counts[status] = 0;
+  for (const [status, value] of Object.entries(driverStats?.counts || {})) {
+    counts[status] = Math.max(0, Number(value) || 0);
+  }
+
+  const configuredTarget = Number(settings?.driverTarget);
+  const localTarget = Number(localCampaign?.driverTarget);
+  const driverTarget = configuredTarget > 0
+    ? configuredTarget
+    : (localTarget > 0 ? localTarget : 0);
+
+  return {
+    id,
+    name: campaign?.name || localCampaign?.name || '',
+    client: localCampaign?.client || campaign?.client || '',
+    status: campaign?.status || localCampaign?.status || 'ativa',
+    period: campaign?.period || localCampaign?.period || '',
+    apiData: {
+      city: apiData.city || localCampaign?.apiData?.city || '',
+      state: apiData.state || localCampaign?.apiData?.state || '',
+      metaKms: Number(apiData.metaKms ?? localCampaign?.apiData?.metaKms) || 0,
+    },
+    counts,
+    driverCount: Math.max(0, Number(driverStats?.driverCount) || 0),
+    reviewCount: Math.max(0, Number(reviewCount) || 0),
+    driverTarget,
+    createdAt: campaign?.createdAt || localCampaign?.createdAt || null,
+    updatedAt: campaign?.updatedAt || localCampaign?.updatedAt || null,
+  };
+}
+
 /**
  * Mescla motorista da API com dados locais (evidence, schedule, etc.)
  */
@@ -881,6 +923,78 @@ router.get('/', async (req, res) => {
     // Fallback: se a API falhar, retorna dados locais
     const db = loadDB();
     res.json(db.campaigns.map(c => summarizeCampaign(db, c)));
+  }
+});
+
+/**
+ * GET /api/campaigns/summary
+ * Payload minimo para a listagem do Gerenciador de Campanhas. As contagens
+ * sao agregadas no MongoDB e nenhum documento completo de motorista e enviado
+ * para o processo Node durante a navegacao da lista.
+ */
+router.get('/summary', async (req, res) => {
+  try {
+    const [apiCampaigns, driverStatsByCampaign] = await Promise.all([
+      fetchCampaignSummaries(),
+      fetchCampaignDriverStats(),
+    ]);
+    const db = loadDB();
+    const localCampaignsById = new Map(
+      (db.campaigns || []).map(campaign => [String(campaign?.id || '').trim(), campaign]),
+    );
+    const reviewCountsByCampaign = new Map();
+    for (const item of db.review || []) {
+      const campaignId = String(item?.campaignId || '').trim();
+      if (!campaignId) continue;
+      reviewCountsByCampaign.set(campaignId, (reviewCountsByCampaign.get(campaignId) || 0) + 1);
+    }
+
+    const ids = apiCampaigns
+      .map(campaign => String(campaign?.id || campaign?._id || '').trim())
+      .filter(Boolean);
+    let settingsByCampaign = new Map();
+    try {
+      settingsByCampaign = await getCampaignSettingsByIds(ids);
+    } catch (settingsErr) {
+      console.warn('[campaigns] GET /summary falha ao buscar campaign_settings:', settingsErr?.message);
+    }
+
+    const items = apiCampaigns.map(campaign => {
+      const id = String(campaign?.id || campaign?._id || '').trim();
+      return buildCampaignListItem(campaign, {
+        localCampaign: localCampaignsById.get(id) || null,
+        driverStats: driverStatsByCampaign.get(id) || null,
+        settings: settingsByCampaign.get(id) || null,
+        reviewCount: reviewCountsByCampaign.get(id) || 0,
+      });
+    });
+
+    res.json(items);
+  } catch (err) {
+    console.error('[campaigns] GET /summary error, falling back to local:', err?.message);
+    const db = loadDB();
+    const localStats = new Map();
+    for (const driver of db.drivers || []) {
+      const campaignId = String(driver?.campaignId || '').trim();
+      if (!campaignId) continue;
+      const current = localStats.get(campaignId) || { counts: {}, driverCount: 0 };
+      const status = String(driver?.status || 'cadastrando').trim() || 'cadastrando';
+      current.counts[status] = (current.counts[status] || 0) + 1;
+      current.driverCount += 1;
+      localStats.set(campaignId, current);
+    }
+    const localReviewCounts = new Map();
+    for (const item of db.review || []) {
+      const campaignId = String(item?.campaignId || '').trim();
+      if (!campaignId) continue;
+      localReviewCounts.set(campaignId, (localReviewCounts.get(campaignId) || 0) + 1);
+    }
+    res.json((db.campaigns || []).map(campaign => buildCampaignListItem(campaign, {
+      localCampaign: campaign,
+      driverStats: localStats.get(String(campaign?.id || '').trim()) || null,
+      settings: null,
+      reviewCount: localReviewCounts.get(String(campaign?.id || '').trim()) || 0,
+    })));
   }
 });
 

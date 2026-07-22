@@ -64,6 +64,10 @@ export async function fetchCampaigns() {
   return sync.readCampaigns();
 }
 
+export async function fetchCampaignSummaries() {
+  return sync.readCampaignSummaries();
+}
+
 export async function fetchCampaignById(campaignId) {
   return sync.readCampaignById(campaignId);
 }
@@ -83,6 +87,58 @@ function detachmentMatchesDriver(detachment, driver) {
   const detachedAssignmentId = String(detachment.driverCampaignId || '').trim();
   const currentAssignmentId = driverCampaignAssignmentId(driver);
   return !detachedAssignmentId || !currentAssignmentId || detachedAssignmentId === currentAssignmentId;
+}
+
+/**
+ * Retorna somente contagens consolidadas para a listagem de campanhas.
+ * Desvinculacoes feitas no Workspace sao descontadas sem carregar a base
+ * completa de motoristas na memoria do processo.
+ */
+export async function fetchCampaignDriverStats() {
+  const rows = await sync.readCampaignDriverStats();
+  const statsByCampaign = new Map();
+
+  for (const row of rows || []) {
+    const campaignId = String(row?._id?.campaignId || '').trim();
+    if (!campaignId) continue;
+    const status = String(row?._id?.status || 'cadastrando').trim() || 'cadastrando';
+    const count = Math.max(0, Number(row?.count) || 0);
+    const current = statsByCampaign.get(campaignId) || { counts: {}, driverCount: 0 };
+    current.counts[status] = (current.counts[status] || 0) + count;
+    current.driverCount += count;
+    statsByCampaign.set(campaignId, current);
+  }
+
+  if (!statsByCampaign.size) return statsByCampaign;
+
+  const detachments = await mongo.listCampaignDriverDetachments(
+    Array.from(statsByCampaign.keys()),
+  );
+  if (!detachments.length) return statsByCampaign;
+
+  const detachedDrivers = await sync.readDriverAssignmentsByIds(
+    detachments.map(item => item.driverId),
+  );
+  const driversById = new Map();
+  for (const driver of detachedDrivers) {
+    const id = String(driver?.id || driver?._id || '').trim();
+    if (id) driversById.set(id, driver);
+  }
+
+  for (const detachment of detachments) {
+    const driver = driversById.get(String(detachment?.driverId || '').trim());
+    const campaignId = String(detachment?.campaignId || '').trim();
+    if (!driver || String(driver.campaignId || '').trim() !== campaignId) continue;
+    if (!detachmentMatchesDriver(detachment, driver)) continue;
+
+    const stats = statsByCampaign.get(campaignId);
+    if (!stats) continue;
+    const status = String(driver.status || 'cadastrando').trim() || 'cadastrando';
+    if ((stats.counts[status] || 0) > 0) stats.counts[status] -= 1;
+    if (stats.driverCount > 0) stats.driverCount -= 1;
+  }
+
+  return statsByCampaign;
 }
 
 async function loadDetachedCampaignDriverPairs(drivers = []) {

@@ -771,7 +771,7 @@ async function loadCampaigns(forceRefresh = false) {
 
   // 2. Sem cache ou refresh forçado → buscar do backend
   try {
-    const data = await fetchJSON('/api/campaigns');
+    const data = await fetchJSON('/api/campaigns/summary');
     campaignsCache = Array.isArray(data) ? data : [];
     saveCampaignsToStorage(campaignsCache);
     renderCampaigns();
@@ -868,7 +868,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
 });
-
 
 
 

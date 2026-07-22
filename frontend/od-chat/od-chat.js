@@ -853,7 +853,7 @@
     if (!forceRefresh && campaignDriverLoadPromise) return campaignDriverLoadPromise;
 
     var loadPromise = (async function () {
-      var results = await Promise.allSettled([authFetch('/api/drivers'), authFetch('/api/campaigns')]);
+      var results = await Promise.allSettled([authFetch('/api/drivers'), authFetch('/api/campaigns/summary')]);
       if (results[0].status === 'fulfilled') {
         var items = Array.isArray(results[0].value && results[0].value.items) ? results[0].value.items : [];
         allDrivers = items.filter(function (d) { return d && d.phone; }).sort(function (a, b) { return String(a && a.name || '').localeCompare(String(b && b.name || ''), 'pt-BR'); });

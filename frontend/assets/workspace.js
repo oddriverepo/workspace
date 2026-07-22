@@ -79,7 +79,7 @@
     setSplashProgress(20);
 
     const [campResult, drvResult] = await Promise.allSettled([
-      fetchJSON('/api/campaigns'),
+      fetchJSON('/api/campaigns/summary'),
       fetchJSON('/api/drivers'),
     ]);
 
@@ -1485,7 +1485,7 @@
     /* ── 2) Fetch fresh data in background ──────────────────── */
     try {
       // Buscar campanhas sempre da API (MongoDB)
-      let campaignsPromise = fetchJSON('/api/campaigns');
+      const campaignsPromise = fetchJSON('/api/campaigns/summary');
 
       const [campaignsResult, proposalsResult] = await Promise.allSettled([
         campaignsPromise,

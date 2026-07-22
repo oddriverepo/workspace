@@ -7,7 +7,7 @@
  *   window.CustomWidgets.init({
  *     context: 'overview' | 'campaigns',
  *     container: HTMLElement,
- *     getCampaigns: () => Array,   // opcional (fallback: fetch /api/campaigns)
+ *     getCampaigns: () => Array,   // opcional (fallback: fetch /api/campaigns/summary)
  *     getDrivers:   () => Array,   // opcional (fallback: fetch /api/drivers)
  *     // Para context='campaigns', passar getDrivers retornando apenas os drivers da campanha atual
  *   });
@@ -966,7 +966,7 @@
       if (typeof opts.getCampaigns === 'function') {
         campaigns = opts.getCampaigns() || [];
       } else {
-        const r = await apiFetch('/api/campaigns');
+        const r = await apiFetch('/api/campaigns/summary');
         campaigns = Array.isArray(r) ? r : (r?.items || r?.campaigns || []);
       }
     } catch (e) { console.warn('[CustomWidgets] campanhas:', e); }

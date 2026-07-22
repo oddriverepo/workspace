@@ -195,7 +195,7 @@
 
       const results = await Promise.all([
         requestJson(API_BASE + '/api/drivers'),
-        requestJson(API_BASE + '/api/campaigns').catch(function () { return []; }),
+        requestJson(API_BASE + '/api/campaigns/summary').catch(function () { return []; }),
         requestJson(API_BASE + '/api/campaigns/dispatch/templates').catch(function () { return { ok: true, items: [] }; }),
       ]);
 
