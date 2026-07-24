@@ -85,6 +85,16 @@ services:
       - key: GPTMAKER_MAX_PAGES
         value: "50"
 
+      # GPT Maker - recebimento de evidencias pelo agente
+      - key: AGENT_WEBHOOK_SECRET
+        sync: false
+      - key: GOOGLE_DRIVE_EVIDENCE_FOLDER_ID
+        sync: false
+      - key: AGENT_EVIDENCE_MAX_IMAGE_BYTES
+        value: "12582912"
+      - key: AGENT_EVIDENCE_DOWNLOAD_TIMEOUT_MS
+        value: "20000"
+
       # ── Redis (Sessions) ──────────────────────────────────
       # Opcional — sem Redis o app usa sessões em memória (fallback)
       # Se quiser Redis, adicione um Redis service no Render e cole a URL

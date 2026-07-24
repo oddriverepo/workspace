@@ -16,6 +16,8 @@ export const {
   upsertDriverRecord,
   insertEvidenceRecord,
   listOdometerEvidenceByCampaign,
+  listEvidenceByCampaign,
+  getEvidenceRecordById,
   deleteEvidenceRecord,
   deleteStorageFile,
   deleteStorageFilesByFolder,

@@ -707,8 +707,10 @@ export async function listOdometerEvidenceByCampaign(campaignId) {
     const createdAt = doc.created_at instanceof Date
       ? doc.created_at.getTime()
       : new Date(doc.created_at || 0).getTime();
+    const isGridFsEvidence = Boolean(doc.storage_file_id);
     return {
-      id: String(doc._id),
+      id: String(isGridFsEvidence ? doc.storage_file_id : doc._id),
+      evidenceRecordId: String(doc._id),
       type: doc.uploader_type === 'graphic' ? 'graphic' : 'driver',
       campaignId: String(doc.campaign_id || ''),
       driverId: String(doc.driver_id || ''),
@@ -718,6 +720,71 @@ export async function listOdometerEvidenceByCampaign(campaignId) {
       createdAt: Number.isFinite(createdAt) ? createdAt : 0,
       source: 'mongo-evidence',
     };
+  });
+}
+
+export async function listEvidenceByCampaign(campaignId) {
+  const normalizedCampaignId = String(campaignId || '').trim();
+  if (!normalizedCampaignId) return [];
+
+  const database = await getDb();
+  const docs = await database.collection(EVIDENCE_COLLECTION)
+    .find({
+      campaign_id: normalizedCampaignId,
+      $or: [
+        { step: 'odometer-value' },
+        {
+          source_provider: 'gptmaker',
+          status: { $in: ['received', 'recebida'] },
+        },
+      ],
+    })
+    .sort({ created_at: 1 })
+    .toArray();
+
+  return docs.map(doc => {
+    const isGridFsEvidence = Boolean(doc.storage_file_id);
+    const createdAt = doc.created_at instanceof Date
+      ? doc.created_at.getTime()
+      : new Date(doc.created_at || 0).getTime();
+    return {
+      id: String(isGridFsEvidence ? doc.storage_file_id : doc._id),
+      evidenceRecordId: String(doc._id),
+      type: doc.uploader_type === 'graphic' ? 'graphic' : 'driver',
+      campaignId: String(doc.campaign_id || ''),
+      driverId: String(doc.driver_id || ''),
+      graphicId: doc.graphic_id ? String(doc.graphic_id) : null,
+      step: String(doc.step || ''),
+      url: String(doc.url || ''),
+      path: String(doc.path || ''),
+      odometerValue: doc.odometer_value ?? null,
+      createdAt: Number.isFinite(createdAt) ? createdAt : 0,
+      source: isGridFsEvidence ? 'mongo' : String(doc.source || 'mongo-evidence'),
+      driveFileId: doc.drive_file_id ? String(doc.drive_file_id) : null,
+      messageId: doc.source_message_id ? String(doc.source_message_id) : null,
+    };
+  });
+}
+
+export async function getEvidenceRecordById(evidenceId) {
+  const normalizedId = String(evidenceId || '').trim();
+  if (!normalizedId) return null;
+  const database = await getDb();
+  let record = await database.collection(EVIDENCE_COLLECTION).findOne({ _id: normalizedId });
+  if (!record && /^[a-f0-9]{24}$/i.test(normalizedId)) {
+    record = await database.collection(EVIDENCE_COLLECTION).findOne({ _id: new ObjectId(normalizedId) });
+  }
+  return record;
+}
+
+export async function getReceivedEvidenceByDriveFileId(fileId) {
+  const normalizedFileId = String(fileId || '').trim();
+  if (!normalizedFileId) return null;
+  const database = await getDb();
+  return database.collection(EVIDENCE_COLLECTION).findOne({
+    source_provider: 'gptmaker',
+    drive_file_id: normalizedFileId,
+    status: { $in: ['received', 'recebida'] },
   });
 }
 
@@ -1011,6 +1078,7 @@ export async function ensureDatabaseSchema() {
   const database = await getDb();
   await Promise.all([
     database.collection(EVIDENCE_COLLECTION).createIndex({ campaign_id: 1, step: 1, created_at: 1 }),
+    database.collection(EVIDENCE_COLLECTION).createIndex({ campaign_id: 1, driver_id: 1, created_at: -1 }),
     database.collection(CAMPAIGN_DRIVER_DETACHMENTS_COLLECTION)
       .createIndex({ campaignId: 1, status: 1, driverId: 1 }),
   ]);
@@ -1791,6 +1859,9 @@ export default {
   upsertDriverRecord,
   insertEvidenceRecord,
   listOdometerEvidenceByCampaign,
+  listEvidenceByCampaign,
+  getEvidenceRecordById,
+  getReceivedEvidenceByDriveFileId,
   deleteEvidenceRecord,
   deleteStorageFile,
   deleteStorageFilesByFolder,

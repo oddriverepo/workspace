@@ -272,6 +272,39 @@ export async function readDriverByPhone(phone) {
   return db.collection(COL_DRIVERS).findOne({ phoneSuffix: suffix });
 }
 
+export function selectDriverByExactPhone(candidates, phone) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  const nationalDigits = digits.startsWith('55') && (digits.length === 12 || digits.length === 13)
+    ? digits.slice(2)
+    : digits;
+  if (nationalDigits.length !== 10 && nationalDigits.length !== 11) return null;
+
+  const variants = new Set([nationalDigits, `55${nationalDigits}`]);
+  const exactMatches = (Array.isArray(candidates) ? candidates : []).filter(driver =>
+    variants.has(String(driver?.phoneDigits || '').replace(/\D/g, '')),
+  );
+  return exactMatches.length === 1 ? exactMatches[0] : null;
+}
+
+/**
+ * Busca estrita para operacoes de escrita.
+ * Exige DDD + numero e rejeita correspondencias ambiguas.
+ */
+export async function readDriverByExactPhone(phone) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  const nationalDigits = digits.startsWith('55') && (digits.length === 12 || digits.length === 13)
+    ? digits.slice(2)
+    : digits;
+  if (nationalDigits.length !== 10 && nationalDigits.length !== 11) return null;
+
+  const db = await getDb();
+  const candidates = await db.collection(COL_DRIVERS)
+    .find({ phoneSuffix: nationalDigits.slice(-9) })
+    .toArray();
+
+  return selectDriverByExactPhone(candidates, digits);
+}
+
 /**
  * Retorna status da última sincronização.
  */

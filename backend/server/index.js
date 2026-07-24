@@ -53,6 +53,7 @@ import { disparadorRouter } from './disparador/routes/index.js';
 import { GoogleAuthService } from './services/googleAuth.js';
 import { DataStore, MongoDataStore } from './services/dataStore.js';
 import { configureMongoSessions } from './services/sessionStore.js';
+import { configureAgentEvidenceDrive } from './services/agent-evidence-drive.js';
 import * as mongoClient      from './services/mongoClient.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -271,6 +272,7 @@ if (process.env.MONGO_URI) {
 await store.ensureReady();
 
 const googleAuthService = new GoogleAuthService(store);
+configureAgentEvidenceDrive({ googleAuthService });
 
 // Conectar MongoDB no startup
 console.log('[Startup] Inicializando MongoDB...');
@@ -340,6 +342,13 @@ try {
     await ensureGptMakerCrmIndexes();
   } catch (err) {
     console.warn('[Startup] Falha ao criar indices do CRM GPT Maker:', err.message);
+  }
+
+  try {
+    const { ensureAgentEvidenceIndexes } = await import('./services/agent-evidence.js');
+    await ensureAgentEvidenceIndexes();
+  } catch (err) {
+    console.warn('[Startup] Falha ao criar indices das evidencias do agente:', err.message);
   }
 
   // Indices e scheduler de leads de parceiros.

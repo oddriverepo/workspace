@@ -21,7 +21,8 @@ import {
   upsertDriverRecord,
   insertEvidenceRecord,
   deleteEvidenceRecord,
-  listOdometerEvidenceByCampaign,
+  listEvidenceByCampaign,
+  getEvidenceRecordById,
   deleteStorageFile,
   deleteStorageFilesByFolder,
   upsertMasterRecord,
@@ -63,6 +64,7 @@ import { DRIVER_FLOW, GRAPHIC_FLOW, DRIVER_REQUIRED_STEPS, GRAPHIC_REQUIRED_STEP
 import { authenticateAdmin } from '../middleware/authenticate-admin.js';
 import { logAudit } from '../middleware/audit.js';
 import { runWorkload } from '../services/workload-manager.js';
+import { deleteAgentEvidenceDriveFile } from '../services/agent-evidence-drive.js';
 import { ensureLegacyStoreReady, loadLegacyDb, saveLegacyDb } from '../services/legacyStore.js';
 import { dispatchDriverCampaignMessage } from '../services/driver-outreach.js';
 import { listTemplates, getTemplateById } from '../disparador/store/memory-store.js';
@@ -134,17 +136,17 @@ async function collectEvidenceByDriver(db, campaignId, storageEntries = []) {
   const map = new Map();
   // Build set of valid storage file IDs so we can discard orphaned evidence entries
   const validStorageIds = new Set((Array.isArray(storageEntries) ? storageEntries : []).map(e => String(e.id)));
-  let persistedOdometerEvidence = [];
+  let persistedEvidence = [];
   try {
-    persistedOdometerEvidence = await listOdometerEvidenceByCampaign(campaignId);
+    persistedEvidence = await listEvidenceByCampaign(campaignId);
   } catch (err) {
-    console.warn('[campaigns] odometer evidence listing error', err?.message || err);
+    console.warn('[campaigns] evidence listing error', err?.message || err);
   }
   const entries = [];
   const seenIds = new Set();
   for (const entry of [
     ...(Array.isArray(db.evidence) ? db.evidence : []),
-    ...persistedOdometerEvidence,
+    ...persistedEvidence,
   ]) {
     const entryId = String(entry?.id || '').trim();
     if (entryId && seenIds.has(entryId)) continue;
@@ -154,7 +156,11 @@ async function collectEvidenceByDriver(db, campaignId, storageEntries = []) {
   for (const entry of entries) {
     if (!entry || String(entry.campaignId || '') !== String(campaignId || '') || !entry.driverId) continue;
     // Skip evidence entries that reference a deleted storage file (orphaned)
-    if (entry.url && typeof entry.url === 'string' && entry.url.startsWith('/api/storage/')) {
+    if (
+      entry.url &&
+      typeof entry.url === 'string' &&
+      /^\/api\/storage\/[a-f0-9]{24}$/i.test(entry.url)
+    ) {
       const storageId = entry.url.split('/').pop();
       if (!validStorageIds.has(storageId)) continue;
     }
@@ -581,7 +587,7 @@ async function getEvidenceEntries(db, campaign, filter = {}) {
       if (filter.graphicId !== undefined && item.type !== 'graphic') continue;
       
       // Skip evidence that references deleted storage files (orphaned URLs)
-      if (item.url && item.url.startsWith('/api/storage/')) {
+      if (item.url && /^\/api\/storage\/[a-f0-9]{24}$/i.test(item.url)) {
         const storageId = item.url.split('/').pop();
         if (!validStorageIds.has(storageId)) {
           console.log('[campaigns] Skipping orphaned evidence:', { id: item.id, url: item.url });
@@ -2607,6 +2613,14 @@ router.delete('/:id/evidence/:evidenceId', async (req, res) => {
       return res.status(400).json({ error: 'ID da evidência obrigatório' });
     }
 
+    const persistentRecord = await getEvidenceRecordById(evidenceId);
+    const persistentCampaignId = String(
+      persistentRecord?.campaign_id || persistentRecord?.campaignId || '',
+    ).trim();
+    if (persistentRecord && persistentCampaignId && persistentCampaignId !== String(campaign.id)) {
+      return res.status(404).json({ error: 'Evidência não encontrada nesta campanha' });
+    }
+
     let removedFromDbJson = false;
     // Remove from db.json evidence array (if exists)
     if (Array.isArray(db.evidence)) {
@@ -2622,6 +2636,20 @@ router.delete('/:id/evidence/:evidenceId', async (req, res) => {
     // Remove from MongoDB
     const deleted = await deleteEvidenceRecord(evidenceId);
     console.log('[evidence:delete] MongoDB result:', { evidenceId, deleted, removedFromDbJson });
+
+    // O registro deixa de aparecer no sistema antes da limpeza externa. Se o
+    // Drive estiver temporariamente indisponivel, evitamos manter uma evidencia
+    // quebrada visivel e registramos o arquivo privado para limpeza posterior.
+    if (persistentRecord?.drive_file_id && deleted) {
+      try {
+        await deleteAgentEvidenceDriveFile(String(persistentRecord.drive_file_id));
+      } catch (driveError) {
+        console.warn(
+          '[evidence:delete] registro removido; limpeza do Drive ficou pendente:',
+          driveError?.message || driveError,
+        );
+      }
+    }
 
     await logAudit(req, 'evidence:delete', {
       entityType: 'evidence',

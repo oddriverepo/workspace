@@ -6,7 +6,7 @@
  *
  * SEGURANÇA:
  *  - Bearer token via AGENT_WEBHOOK_SECRET (timing-safe, hard-fail sem env)
- *  - Todos os endpoints são read-only
+ *  - Consultas são read-only; a gravação é restrita a evidências de imagem
  *  - Respostas nunca contêm CPF, PIX, e-mail, fotos, IDs internos,
  *    metas numéricas, dados financeiros ou qualquer campo sensível
  *  - O agente recebe apenas indicadores binários/categóricos + safe_reply
@@ -17,9 +17,12 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import {
   lookup_contact,
-  get_driver_details,
   search_campaigns_by_city,
 } from '../services/mcp/tools.js';
+import { registerAgentEvidence } from '../services/agent-evidence.js';
+import { normalizeEvidencePhone } from '../services/agent-evidence-utils.js';
+import { isCampaignDriverDetached } from '../services/mongo.js';
+import { readCampaignById, readDriverByExactPhone } from '../services/oddrive-sync.js';
 
 const router = Router();
 
@@ -139,6 +142,44 @@ function safeReplyDriverCampaign(details) {
   };
 }
 
+async function getExactDriverCampaignStatus(rawPhone) {
+  const phone = normalizeEvidencePhone(rawPhone);
+  if (!phone) {
+    return {
+      invalid: true,
+      found: false,
+    };
+  }
+
+  const driver = await readDriverByExactPhone(phone);
+  if (!driver) return { invalid: false, found: false };
+
+  const driverId = String(driver.id || driver._id || '').trim();
+  const campaignId = String(
+    driver.campaignId || driver.campaignData?.campaignId || '',
+  ).trim();
+  const driverCampaignId = String(
+    driver.driverCampaignId || driver.campaignData?.driverCampaignId || '',
+  ).trim();
+
+  if (!campaignId || await isCampaignDriverDetached(campaignId, driverId, driverCampaignId)) {
+    return {
+      invalid: false,
+      found: true,
+      campaign_name: '',
+      status: 'none',
+    };
+  }
+
+  const campaign = await readCampaignById(campaignId);
+  return {
+    invalid: false,
+    found: true,
+    campaign_name: String(campaign?.name || campaign?.title || '').trim(),
+    status: String(driver.status || 'active').trim(),
+  };
+}
+
 // ── Endpoints ─────────────────────────────────────────────────────────
 
 /**
@@ -156,6 +197,29 @@ function safeReplyDriverCampaign(details) {
 const MAX_PHONE = 30;
 const MAX_NAME  = 120;
 const MAX_CITY  = 80;
+
+/**
+ * POST /api/agent/evidences/register-image
+ *
+ * Registra uma imagem recebida pelo agente no fluxo de evidências da campanha.
+ * O backend identifica motorista e campanha exclusivamente pelo telefone.
+ */
+router.post('/evidences/register-image', async (req, res) => {
+  try {
+    const result = await registerAgentEvidence(req.body || {});
+    return res.json(result);
+  } catch (error) {
+    const status = Number(error?.status || error?.statusCode || 500);
+    const clientError = status >= 400 && status < 500;
+    console.error('[agent][evidence] erro:', error?.message || error);
+    return res.status(clientError ? status : 500).json({
+      success: false,
+      safe_reply: clientError
+        ? 'Não consegui processar essa imagem. Verifique os dados e tente novamente.'
+        : 'Não consegui salvar essa imagem agora. Tente novamente em alguns instantes.',
+    });
+  }
+});
 
 router.post('/lookup-contact-status', async (req, res) => {
   try {
@@ -245,13 +309,26 @@ router.post('/search-campaign-status-by-city', async (req, res) => {
  */
 router.post('/search-campaign-status-by-contact', async (req, res) => {
   try {
-    const phone = String(req.body?.phone ?? '').slice(0, MAX_PHONE) || undefined;
+    const phone = String(req.body?.phone ?? '').slice(0, MAX_PHONE);
 
     if (!phone) {
-      return res.status(400).json({ error: 'phone é obrigatório' });
+      return res.status(400).json({
+        has_campaign: false,
+        status: 'invalid_phone',
+        registered_driver: false,
+        safe_reply: 'Não consegui identificar o telefone deste contato.',
+      });
     }
 
-    const details = await get_driver_details({ phone });
+    const details = await getExactDriverCampaignStatus(phone);
+    if (details.invalid) {
+      return res.status(400).json({
+        has_campaign: false,
+        status: 'invalid_phone',
+        registered_driver: false,
+        safe_reply: 'Não consegui identificar um telefone válido para este contato.',
+      });
+    }
     return res.json(safeReplyDriverCampaign(details));
   } catch (err) {
     console.error('[agent][search-campaign-status-by-contact] erro:', err?.message);

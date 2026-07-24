@@ -378,6 +378,8 @@ const STEP_LABELS = {
   'photo-right': 'Foto lateral direita',
   'photo-rear': 'Foto traseira',
   'photo-front': 'Foto frontal',
+  receipt: 'Comprovante',
+  other: 'Outra evidência',
   notes: 'Observações',
 };
 
