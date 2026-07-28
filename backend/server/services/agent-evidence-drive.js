@@ -56,6 +56,24 @@ function safeSegment(value, fallback) {
   return segment || fallback;
 }
 
+function phoneDigits(value) {
+  return String(value || '').replace(/\D/g, '').slice(0, 20);
+}
+
+export function buildAgentEvidenceDriverFolderName(driver = {}) {
+  const name = String(driver?.name || 'Motorista').trim();
+  const phone = phoneDigits(
+    driver?.phone ||
+    driver?.phoneDigits ||
+    driver?.contactPhone ||
+    driver?.whatsapp ||
+    driver?.whatsappPhone ||
+    '',
+  );
+  const id = String(driver?.id || driver?._id || '').trim();
+  return safeSegment([name, phone, id].filter(Boolean).join(' - '), 'Motorista');
+}
+
 function escapeDriveQuery(value) {
   return String(value || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
@@ -254,10 +272,7 @@ export async function uploadAgentEvidenceImage({
           'Campanha',
         )
       : 'Motoristas sem campanha';
-    const driverName = safeSegment(
-      `${driver?.name || 'Motorista'} - ${driver?.id || driver?._id || ''}`,
-      'Motorista',
-    );
+    const driverName = buildAgentEvidenceDriverFolderName(driver);
     const campaignFolderId = await ensureFolder(rootId, campaignName);
     const driverFolderId = await ensureFolder(campaignFolderId, driverName);
     const dayName = dateFolderName(receivedAt);

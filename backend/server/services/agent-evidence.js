@@ -75,6 +75,7 @@ function publicDriver(driver) {
   return {
     id: String(driver?.id || driver?._id || ''),
     name: String(driver?.name || '').trim(),
+    phone: normalizeEvidencePhone(driver?.phoneDigits || driver?.phone || ''),
     campaignId: String(driver?.campaignId || driver?.campaignData?.campaignId || '').trim(),
     driverCampaignId: String(driver?.campaignData?.driverCampaignId || driver?.driverCampaignId || '').trim(),
   };
@@ -323,7 +324,10 @@ export async function registerAgentEvidence(input = {}) {
   const rawDriver = await atEvidenceStage('lookup_driver', () =>
     readDriverByExactPhone(phone),
   );
-  const driver = publicDriver(rawDriver);
+  const driver = {
+    ...publicDriver(rawDriver),
+    phone,
+  };
   if (!driver.id) {
     return { success: false, ignored: true, safe_reply: NOT_REGISTERED_REPLY };
   }
