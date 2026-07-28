@@ -175,6 +175,21 @@ function imageUrlFrom(object) {
   return '';
 }
 
+function imageUrlFromImages(value) {
+  if (!Array.isArray(value) || !value.length) return '';
+  for (const item of value.slice(0, 10)) {
+    if (typeof item === 'string' || typeof item === 'number') {
+      const direct = textValue(item, MAX_URL_LENGTH);
+      if (direct.startsWith('https://')) return direct;
+      continue;
+    }
+    if (!isRecord(item)) continue;
+    const direct = imageUrlFrom(item);
+    if (direct) return direct;
+  }
+  return '';
+}
+
 function normalizedType(object) {
   const raw = textValue(field(object, [
     'type',
@@ -328,6 +343,9 @@ function evidenceTypeFrom(message, candidates, caption) {
 }
 
 function readPayload(payload) {
+  const topLevel = readTopLevelGptMakerPayload(payload);
+  if (topLevel) return topLevel;
+
   const candidates = collectObjects(payload);
   const ranked = [...candidates].sort((a, b) =>
     scoreMessageCandidate(b) - scoreMessageCandidate(a),
@@ -353,6 +371,46 @@ function readPayload(payload) {
     imageUrl,
     type,
     sender,
+    chatId,
+    contactId,
+    messageId,
+    caption,
+    phone,
+  };
+}
+
+function readTopLevelGptMakerPayload(payload) {
+  if (!isRecord(payload)) return null;
+  if (isRecord(payload.message) && !Array.isArray(payload.images)) return null;
+
+  const role = textValue(payload.role, 40).toLowerCase();
+  const images = Array.isArray(payload.images) ? payload.images : [];
+  const imageUrl = imageUrlFromImages(images);
+  const chatId = textValue(payload.contextId ?? payload.chatId ?? payload.chat_id, MAX_ID_LENGTH);
+  const contactId = textValue(payload.contactId ?? payload.contact_id, MAX_ID_LENGTH);
+  const messageId = textValue(payload.messageId ?? payload.message_id, MAX_ID_LENGTH);
+  const caption = textValue(payload.message ?? payload.caption ?? payload.text ?? '', MAX_TEXT_LENGTH);
+  const phone = normalizeEvidencePhone(payload.contactPhone)
+    || normalizeEvidencePhone(payload.phone)
+    || extractPhoneFromGptMakerIdentifiers(chatId, contactId);
+  const hasRealShape = Boolean(
+    role
+    || payload.contactPhone
+    || chatId
+    || messageId
+    || images.length
+    || payload.channel
+  );
+
+  if (!hasRealShape) return null;
+
+  return {
+    ranked: [{ value: payload, depth: 0, path: 'body' }],
+    message: payload,
+    imageUrl,
+    imagesCount: images.length,
+    type: images.length ? 'IMAGE' : normalizedType(payload),
+    sender: senderKind(payload),
     chatId,
     contactId,
     messageId,
@@ -398,7 +456,15 @@ export function normalizeGptMakerNewMessage(payload = {}) {
 
 export function summarizeGptMakerWebhookPayload(payload = {}) {
   const parsed = readPayload(payload);
+  const imagesCount = Number.isFinite(parsed.imagesCount)
+    ? parsed.imagesCount
+    : (Array.isArray(payload?.images) ? payload.images.length : 0);
   return {
+    role: isRecord(payload) ? textValue(payload.role, 40) : '',
+    has_contactPhone: Boolean(isRecord(payload) && payload.contactPhone),
+    has_contextId: Boolean(isRecord(payload) && payload.contextId),
+    has_messageId: Boolean(isRecord(payload) && payload.messageId),
+    images_count: imagesCount,
     has_chat_id: Boolean(parsed.chatId),
     has_message_id: Boolean(parsed.messageId),
     has_contact_id: Boolean(parsed.contactId),

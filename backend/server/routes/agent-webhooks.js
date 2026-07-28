@@ -23,6 +23,7 @@ import { registerAgentEvidence } from '../services/agent-evidence.js';
 import {
   normalizeGptMakerNewMessage,
   sanitize,
+  summarizeGptMakerWebhookPayload,
 } from '../services/agent-evidence-webhook.js';
 import { normalizeEvidencePhone } from '../services/agent-evidence-utils.js';
 import { isCampaignDriverDetached } from '../services/mongo.js';
@@ -316,6 +317,31 @@ router.post('/evidences/on-new-message-debug', (req, res) => {
   return res.json({ success: true, received: true });
 });
 
+function evidenceEventLog(payload, extra = {}) {
+  const snapshot = summarizeGptMakerWebhookPayload(payload || {});
+  console.info(
+    '[agent][evidence][on-new-message][event]',
+    JSON.stringify({
+      has_contactPhone: snapshot.has_contactPhone,
+      has_contextId: snapshot.has_contextId,
+      has_messageId: snapshot.has_messageId,
+      images_count: snapshot.images_count,
+      role: snapshot.role || snapshot.message_role || 'unknown',
+      ignored_reason: extra.ignored_reason || null,
+      debug_reason: extra.debug_reason || null,
+      processing_result: extra.processing_result || 'received',
+    }),
+  );
+}
+
+function missingEvidenceEventFields(input = {}) {
+  const missing = [];
+  if (!input.phone) missing.push('phone');
+  if (!input.message_id) missing.push('message_id');
+  if (!input.image_url && !input.chat_id) missing.push('image_url_or_chat_id');
+  return missing;
+}
+
 /**
  * POST /api/agent/evidences/on-new-message
  *
@@ -325,22 +351,57 @@ router.post('/evidences/on-new-message-debug', (req, res) => {
 router.post('/evidences/on-new-message', async (req, res) => {
   const event = normalizeGptMakerNewMessage(req.body || {});
   if (!event.accepted) {
+    evidenceEventLog(req.body, {
+      ignored_reason: event.reason,
+      processing_result: 'ignored',
+    });
     return res.json({
       success: true,
       ignored: true,
-      reason: event.reason,
+      ignored_reason: event.reason,
+      processed: false,
+    });
+  }
+
+  const missingFields = missingEvidenceEventFields(event.input);
+  if (missingFields.length) {
+    const debugReason = `missing_${missingFields.join('_')}`;
+    evidenceEventLog(req.body, {
+      debug_reason: debugReason,
+      processing_result: 'missing_required_fields',
+    });
+    return res.json({
+      success: false,
+      processed: false,
+      debug_reason: debugReason,
+      safe_reply: 'Nao consegui processar essa imagem. Vou encaminhar para conferencia da equipe.',
     });
   }
 
   try {
     const result = await registerAgentEvidence(event.input);
-    return res.json(result);
+    evidenceEventLog(req.body, {
+      processing_result: result?.ignored
+        ? 'ignored_not_registered'
+        : (result?.duplicate ? 'duplicate' : 'processed'),
+    });
+    return res.json({
+      processed: Boolean(result?.success && !result?.ignored && !result?.duplicate),
+      ...result,
+    });
   } catch (error) {
     const status = Number(error?.status || error?.statusCode || 500);
     const clientError = status >= 400 && status < 500;
+    const debugReason = clientError ? 'processing_client_error' : 'processing_server_error';
+    evidenceEventLog(req.body, {
+      debug_reason: debugReason,
+      processing_result: 'failed',
+    });
     console.error('[agent][evidence][on-new-message] erro:', error?.message || error);
     return res.status(clientError ? status : 500).json({
       success: false,
+      processed: false,
+      debug_reason: debugReason,
       safe_reply: clientError
         ? 'Nao consegui processar essa imagem. Vou encaminhar para conferencia da equipe.'
         : 'Nao consegui salvar essa imagem agora. Tente novamente em alguns instantes.',

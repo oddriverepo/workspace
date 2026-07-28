@@ -88,6 +88,62 @@ test('normaliza imagem recebida e extrai telefone do chatId', () => {
   });
 });
 
+test('normaliza payload real top-level do onNewMessage do GPT Maker', () => {
+  const result = normalizeGptMakerNewMessage({
+    role: 'user',
+    contactPhone: '554896309676',
+    contextId: CHAT_ID,
+    messageId: MESSAGE_ID,
+    images: [IMAGE_URL],
+    message: 'frontal',
+    channel: 'WHATSAPP',
+  });
+
+  assert.equal(result.accepted, true);
+  assert.deepEqual(result.input, {
+    phone: '554896309676',
+    chat_id: CHAT_ID,
+    contact_id: '',
+    message_id: MESSAGE_ID,
+    image_url: IMAGE_URL,
+    media_type: 'IMAGE',
+    message_time: null,
+    caption: 'frontal',
+    evidence_type: 'frontal',
+  });
+});
+
+test('normaliza payload real com imagem em objeto', () => {
+  const result = normalizeGptMakerNewMessage({
+    role: 'user',
+    contactPhone: '554896309676',
+    contextId: CHAT_ID,
+    messageId: MESSAGE_ID,
+    images: [{ mediaUrl: IMAGE_URL }],
+    message: 'lateral esquerda',
+    channel: 'WHATSAPP',
+  });
+
+  assert.equal(result.accepted, true);
+  assert.equal(result.input.image_url, IMAGE_URL);
+  assert.equal(result.input.evidence_type, 'lateral esquerda');
+});
+
+test('ignora payload real sem imagem', () => {
+  const result = normalizeGptMakerNewMessage({
+    role: 'user',
+    contactPhone: '554896309676',
+    contextId: CHAT_ID,
+    messageId: MESSAGE_ID,
+    images: [],
+    message: 'texto sem foto',
+    channel: 'WHATSAPP',
+  });
+
+  assert.equal(result.accepted, false);
+  assert.equal(result.reason, 'not_image');
+});
+
 test('aceita imagem recebida sem imageUrl para fallback pela API', () => {
   const result = normalizeGptMakerNewMessage({
     chatId: CHAT_ID,
@@ -168,6 +224,11 @@ test('resumo de diagnostico nao expoe valores sensiveis', () => {
   const serialized = JSON.stringify(summary);
 
   assert.deepEqual(summary, {
+    role: '',
+    has_contactPhone: false,
+    has_contextId: false,
+    has_messageId: false,
+    images_count: 0,
     has_chat_id: true,
     has_message_id: true,
     has_contact_id: false,
