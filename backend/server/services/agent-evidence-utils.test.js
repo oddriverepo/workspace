@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  buildBrazilPhoneSuffixes,
+  buildBrazilPhoneVariants,
   detectImageType,
   isPrivateAddress,
   mapEvidenceType,
@@ -13,8 +15,39 @@ test('normaliza telefones brasileiros sem duplicar o DDI', () => {
   assert.equal(normalizeEvidencePhone('+55 11 99999-9999'), '5511999999999');
   assert.equal(normalizeEvidencePhone('(55) 99999-9999'), '5555999999999');
   assert.equal(normalizeEvidencePhone('+55 55 99999-9999'), '5555999999999');
+  assert.equal(normalizeEvidencePhone('554896309676'), '554896309676');
   assert.equal(normalizeEvidencePhone('99999-9999'), '');
   assert.equal(normalizeEvidencePhone('123'), '');
+});
+
+test('gera variantes brasileiras com e sem nono digito', () => {
+  assert.deepEqual(buildBrazilPhoneVariants('554896309676'), [
+    '4896309676',
+    '554896309676',
+    '48996309676',
+    '5548996309676',
+  ]);
+  assert.deepEqual(buildBrazilPhoneSuffixes('554896309676'), [
+    '896309676',
+    '996309676',
+  ]);
+  assert.deepEqual(buildBrazilPhoneVariants('5548996309676'), [
+    '48996309676',
+    '5548996309676',
+    '4896309676',
+    '554896309676',
+  ]);
+});
+
+test('nao inventa variante de nono digito para telefone fixo ou celular invalido', () => {
+  assert.deepEqual(buildBrazilPhoneVariants('554832345678'), [
+    '4832345678',
+    '554832345678',
+  ]);
+  assert.deepEqual(buildBrazilPhoneVariants('5548951234567'), [
+    '48951234567',
+    '5548951234567',
+  ]);
 });
 
 test('mapeia os tipos do agente para os passos usados pela galeria', () => {

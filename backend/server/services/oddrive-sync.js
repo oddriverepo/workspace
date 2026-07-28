@@ -17,6 +17,10 @@
 import { getDb } from './mongo.js';
 import { normalizeName } from '../lib/normalize.js';
 import { recordCacheEvent } from './runtime-telemetry.js';
+import {
+  buildBrazilPhoneSuffixes,
+  buildBrazilPhoneVariants,
+} from './agent-evidence-utils.js';
 
 const COL_CAMPAIGNS = 'api_campaigns';
 const COL_DRIVERS   = 'api_drivers';
@@ -273,13 +277,8 @@ export async function readDriverByPhone(phone) {
 }
 
 export function selectDriverByExactPhone(candidates, phone) {
-  const digits = String(phone || '').replace(/\D/g, '');
-  const nationalDigits = digits.startsWith('55') && (digits.length === 12 || digits.length === 13)
-    ? digits.slice(2)
-    : digits;
-  if (nationalDigits.length !== 10 && nationalDigits.length !== 11) return null;
-
-  const variants = new Set([nationalDigits, `55${nationalDigits}`]);
+  const variants = new Set(buildBrazilPhoneVariants(phone));
+  if (!variants.size) return null;
   const exactMatches = (Array.isArray(candidates) ? candidates : []).filter(driver =>
     variants.has(String(driver?.phoneDigits || '').replace(/\D/g, '')),
   );
@@ -292,14 +291,12 @@ export function selectDriverByExactPhone(candidates, phone) {
  */
 export async function readDriverByExactPhone(phone) {
   const digits = String(phone || '').replace(/\D/g, '');
-  const nationalDigits = digits.startsWith('55') && (digits.length === 12 || digits.length === 13)
-    ? digits.slice(2)
-    : digits;
-  if (nationalDigits.length !== 10 && nationalDigits.length !== 11) return null;
+  const suffixes = buildBrazilPhoneSuffixes(digits);
+  if (!suffixes.length) return null;
 
   const db = await getDb();
   const candidates = await db.collection(COL_DRIVERS)
-    .find({ phoneSuffix: nationalDigits.slice(-9) })
+    .find({ phoneSuffix: { $in: suffixes } })
     .toArray();
 
   return selectDriverByExactPhone(candidates, digits);

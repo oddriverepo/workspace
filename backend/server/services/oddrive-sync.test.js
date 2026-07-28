@@ -23,6 +23,33 @@ test('aceita telefone armazenado com DDI e rejeita correspondencia ambigua', () 
   assert.equal(selectDriverByExactPhone(duplicate, '5511999999999'), null);
 });
 
+test('seleciona motorista cadastrado com nono digito quando o agente envia sem nono', () => {
+  const drivers = [
+    { id: 'pedro', phoneDigits: '48996309676' },
+  ];
+
+  assert.equal(selectDriverByExactPhone(drivers, '554896309676')?.id, 'pedro');
+  assert.equal(selectDriverByExactPhone(drivers, '4896309676')?.id, 'pedro');
+  assert.equal(selectDriverByExactPhone(drivers, '+55 (48) 9630-9676')?.id, 'pedro');
+});
+
+test('seleciona motorista armazenado com DDI ao aplicar variante do nono digito', () => {
+  const drivers = [
+    { id: 'pedro', phoneDigits: '5548996309676' },
+  ];
+
+  assert.equal(selectDriverByExactPhone(drivers, '554896309676')?.id, 'pedro');
+});
+
+test('rejeita variante com nono digito quando existe mais de uma correspondencia possivel', () => {
+  const drivers = [
+    { id: 'old-format', phoneDigits: '4896309676' },
+    { id: 'new-format', phoneDigits: '48996309676' },
+  ];
+
+  assert.equal(selectDriverByExactPhone(drivers, '554896309676'), null);
+});
+
 test('rejeita telefone sem DDD', () => {
   const drivers = [{ id: 'one', phoneDigits: '11999999999' }];
   assert.equal(selectDriverByExactPhone(drivers, '999999999'), null);

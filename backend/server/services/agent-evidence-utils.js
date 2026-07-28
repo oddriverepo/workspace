@@ -13,10 +13,45 @@ function positiveInt(value, fallback, maximum) {
 }
 
 export function normalizeEvidencePhone(value) {
+  const variants = buildBrazilPhoneVariants(value);
+  return variants.find(phone => phone.startsWith('55') && (phone.length === 12 || phone.length === 13))
+    || variants[0]
+    || '';
+}
+
+export function buildBrazilPhoneVariants(value) {
   const digits = String(value || '').replace(/\D/g, '');
-  if (digits.length === 10 || digits.length === 11) return `55${digits}`;
-  if ((digits.length === 12 || digits.length === 13) && digits.startsWith('55')) return digits;
-  return '';
+  const nationalDigits = digits.startsWith('55') && (digits.length === 12 || digits.length === 13)
+    ? digits.slice(2)
+    : digits;
+  if (nationalDigits.length !== 10 && nationalDigits.length !== 11) return [];
+
+  const ddd = nationalDigits.slice(0, 2);
+  const local = nationalDigits.slice(2);
+  if (ddd.length !== 2 || (local.length !== 8 && local.length !== 9)) return [];
+
+  const nationalVariants = [nationalDigits];
+  if (/^[6-9]\d{7}$/.test(local)) {
+    nationalVariants.push(`${ddd}9${local}`);
+  } else if (/^9[6-9]\d{7}$/.test(local)) {
+    nationalVariants.push(`${ddd}${local.slice(1)}`);
+  }
+
+  const variants = [];
+  for (const national of nationalVariants) {
+    variants.push(national, `55${national}`);
+  }
+  return [...new Set(variants)];
+}
+
+export function buildBrazilPhoneSuffixes(value) {
+  const suffixes = buildBrazilPhoneVariants(value)
+    .map(phone => phone.startsWith('55') && (phone.length === 12 || phone.length === 13)
+      ? phone.slice(2)
+      : phone)
+    .filter(phone => phone.length === 10 || phone.length === 11)
+    .map(phone => phone.slice(-9));
+  return [...new Set(suffixes)];
 }
 
 export function mapEvidenceType(value) {
