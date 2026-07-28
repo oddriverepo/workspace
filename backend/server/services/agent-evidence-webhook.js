@@ -454,6 +454,31 @@ export function normalizeGptMakerNewMessage(payload = {}) {
   };
 }
 
+export function summarizeGptMakerImageItem(payload = {}) {
+  const images = isRecord(payload) && Array.isArray(payload.images)
+    ? payload.images
+    : [];
+  const item = images[0];
+  const itemIsObject = isRecord(item);
+
+  return {
+    image_item_type: Array.isArray(item)
+      ? 'array'
+      : (item === null ? 'null' : typeof item),
+    image_item_keys: itemIsObject ? Object.keys(item).slice(0, 30) : [],
+    has_url: Boolean(itemIsObject && textValue(field(item, ['url']), MAX_URL_LENGTH)),
+    has_imageUrl: Boolean(
+      itemIsObject && textValue(field(item, ['imageUrl', 'image_url']), MAX_URL_LENGTH),
+    ),
+    has_mediaUrl: Boolean(
+      itemIsObject && textValue(field(item, ['mediaUrl', 'media_url']), MAX_URL_LENGTH),
+    ),
+    has_fileUrl: Boolean(
+      itemIsObject && textValue(field(item, ['fileUrl', 'file_url']), MAX_URL_LENGTH),
+    ),
+  };
+}
+
 export function summarizeGptMakerWebhookPayload(payload = {}) {
   const parsed = readPayload(payload);
   const imagesCount = Number.isFinite(parsed.imagesCount)

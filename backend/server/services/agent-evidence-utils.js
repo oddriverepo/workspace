@@ -199,8 +199,11 @@ function getResponseHeader(response, name) {
   return Array.isArray(value) ? value[0] : value ?? null;
 }
 
-function requestPinnedHttps(validated, signal) {
+function requestPinnedHttps(validated, signal, extraHeaders = {}) {
   const { url, address, family } = validated;
+  const authorization = typeof extraHeaders.Authorization === 'string'
+    ? extraHeaders.Authorization
+    : (typeof extraHeaders.authorization === 'string' ? extraHeaders.authorization : '');
   return new Promise((resolve, reject) => {
     const request = https.request({
       protocol: 'https:',
@@ -221,6 +224,7 @@ function requestPinnedHttps(validated, signal) {
         Accept: 'image/jpeg,image/png,image/webp,image/heic',
         Host: url.host,
         'User-Agent': 'ODDrive-Evidence/1.0',
+        ...(authorization ? { Authorization: authorization } : {}),
       },
     }, resolve);
     request.on('error', reject);
@@ -267,7 +271,10 @@ export async function downloadRemoteImage(rawUrl, options = {}) {
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     timer.unref?.();
     try {
-      const response = await requestPinnedHttps(validated, controller.signal);
+      const extraHeaders = typeof options.headersForUrl === 'function'
+        ? options.headersForUrl(validated.url)
+        : (options.headers || {});
+      const response = await requestPinnedHttps(validated, controller.signal, extraHeaders);
       const status = Number(response.status ?? response.statusCode ?? 0);
       if ([301, 302, 303, 307, 308].includes(status)) {
         const location = getResponseHeader(response, 'location');
@@ -280,7 +287,10 @@ export async function downloadRemoteImage(rawUrl, options = {}) {
       }
       if (status < 200 || status >= 300) {
         response.resume?.();
-        throw Object.assign(new Error('O provedor não disponibilizou a imagem.'), { status: 502 });
+        throw Object.assign(
+          new Error('O provedor não disponibilizou a imagem.'),
+          { status: 502, upstreamStatus: status },
+        );
       }
 
       const buffer = await readResponseBuffer(response, maxBytes);

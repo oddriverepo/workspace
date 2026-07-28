@@ -4,6 +4,7 @@ import {
   maskString,
   normalizeGptMakerNewMessage,
   sanitize,
+  summarizeGptMakerImageItem,
   summarizeGptMakerWebhookPayload,
 } from './agent-evidence-webhook.js';
 
@@ -127,6 +128,37 @@ test('normaliza payload real com imagem em objeto', () => {
   assert.equal(result.accepted, true);
   assert.equal(result.input.image_url, IMAGE_URL);
   assert.equal(result.input.evidence_type, 'lateral esquerda');
+});
+
+test('resume o formato de images[0] sem registrar o valor da URL', () => {
+  const result = summarizeGptMakerImageItem({
+    images: [{
+      mediaUrl: IMAGE_URL,
+      width: 1080,
+      nested: { private: true },
+    }],
+  });
+
+  assert.deepEqual(result, {
+    image_item_type: 'object',
+    image_item_keys: ['mediaUrl', 'width', 'nested'],
+    has_url: false,
+    has_imageUrl: false,
+    has_mediaUrl: true,
+    has_fileUrl: false,
+  });
+  assert.equal(JSON.stringify(result).includes(IMAGE_URL), false);
+});
+
+test('resume images[0] quando o GPT Maker envia a URL como string', () => {
+  assert.deepEqual(summarizeGptMakerImageItem({ images: [IMAGE_URL] }), {
+    image_item_type: 'string',
+    image_item_keys: [],
+    has_url: false,
+    has_imageUrl: false,
+    has_mediaUrl: false,
+    has_fileUrl: false,
+  });
 });
 
 test('ignora payload real sem imagem', () => {

@@ -22,6 +22,41 @@ const PROCESSING_REPLY = 'Essa foto já está sendo processada. Pode enviar a pr
 const NOT_REGISTERED_REPLY =
   'Não localizei um cadastro ativo para este telefone. A imagem não foi registrada.';
 
+function withEvidenceStage(error, stage) {
+  const target = error instanceof Error
+    ? error
+    : new Error(String(error || 'Falha no processamento'));
+  if (!target.evidenceStage) target.evidenceStage = stage;
+  return target;
+}
+
+async function atEvidenceStage(stage, operation) {
+  try {
+    return await operation();
+  } catch (error) {
+    throw withEvidenceStage(error, stage);
+  }
+}
+
+function gptMakerMediaAuthHosts() {
+  const configured = String(process.env.GPTMAKER_MEDIA_AUTH_HOSTS || '')
+    .split(',')
+    .map(value => value.trim().toLowerCase().replace(/^\./, ''))
+    .filter(Boolean);
+  return configured.length ? configured : ['gptmaker.ai'];
+}
+
+function gptMakerMediaHeadersForUrl(url) {
+  const token = String(process.env.GPTMAKER_API_TOKEN || '').trim();
+  if (!token) return {};
+
+  const hostname = String(url?.hostname || '').toLowerCase();
+  const trusted = gptMakerMediaAuthHosts().some(
+    domain => hostname === domain || hostname.endsWith(`.${domain}`),
+  );
+  return trusted ? { Authorization: `Bearer ${token}` } : {};
+}
+
 function deterministicEvidenceId(messageId) {
   const digest = crypto.createHash('sha256').update(`gptmaker:${messageId}`).digest('hex').slice(0, 28);
   return `gpt_${digest}`;
@@ -222,30 +257,44 @@ export async function registerAgentEvidence(input = {}) {
 
   if (!phone) phone = extractPhoneFromGptMakerIdentifiers(chatId, contactId);
   if (mediaType !== 'IMAGE') {
-    throw Object.assign(new Error('media_type=IMAGE é obrigatório.'), { status: 400 });
+    throw withEvidenceStage(
+      Object.assign(new Error('media_type=IMAGE é obrigatório.'), { status: 400 }),
+      'resolve_payload',
+    );
   }
   if (!imageUrl && !chatId) {
-    throw Object.assign(
-      new Error('image_url ou chat_id é obrigatório para localizar a imagem.'),
-      { status: 400 },
+    throw withEvidenceStage(
+      Object.assign(
+        new Error('image_url ou chat_id é obrigatório para localizar a imagem.'),
+        { status: 400 },
+      ),
+      'resolve_payload',
     );
   }
   if (!messageId && !chatId) {
-    throw Object.assign(
-      new Error('message_id ou chat_id é obrigatório para identificar a mensagem.'),
-      { status: 400 },
+    throw withEvidenceStage(
+      Object.assign(
+        new Error('message_id ou chat_id é obrigatório para identificar a mensagem.'),
+        { status: 400 },
+      ),
+      'resolve_payload',
     );
   }
 
   if (!phone || !imageUrl || !messageId) {
     if (!chatId) {
-      throw Object.assign(
-        new Error('phone ou chat_id é obrigatório para identificar o motorista.'),
-        { status: 400 },
+      throw withEvidenceStage(
+        Object.assign(
+          new Error('phone ou chat_id é obrigatório para identificar o motorista.'),
+          { status: 400 },
+        ),
+        'resolve_payload',
       );
     }
-    const resolved = await runWorkload('external', 'agent-evidence:gptmaker-message', () =>
-      resolveGptMakerImage({ chatId, messageId }),
+    const resolved = await atEvidenceStage('extract_image_url', () =>
+      runWorkload('external', 'agent-evidence:gptmaker-message', () =>
+        resolveGptMakerImage({ chatId, messageId }),
+      ),
     );
     phone ||= normalizeEvidencePhone(resolved.phone);
     imageUrl ||= resolved.imageUrl;
@@ -256,16 +305,24 @@ export async function registerAgentEvidence(input = {}) {
     }
   }
   if (!phone) {
-    throw Object.assign(
-      new Error('Não foi possível identificar o telefone pelo evento do GPT Maker.'),
-      { status: 400 },
+    throw withEvidenceStage(
+      Object.assign(
+        new Error('Não foi possível identificar o telefone pelo evento do GPT Maker.'),
+        { status: 400 },
+      ),
+      'resolve_payload',
     );
   }
   if (!messageId) {
-    throw Object.assign(new Error('O GPT Maker não retornou o ID da mensagem.'), { status: 502 });
+    throw withEvidenceStage(
+      Object.assign(new Error('O GPT Maker não retornou o ID da mensagem.'), { status: 502 }),
+      'extract_image_url',
+    );
   }
 
-  const rawDriver = await readDriverByExactPhone(phone);
+  const rawDriver = await atEvidenceStage('lookup_driver', () =>
+    readDriverByExactPhone(phone),
+  );
   const driver = publicDriver(rawDriver);
   if (!driver.id) {
     return { success: false, ignored: true, safe_reply: NOT_REGISTERED_REPLY };
@@ -274,8 +331,12 @@ export async function registerAgentEvidence(input = {}) {
   let campaign = null;
   let evidenceDriver = driver;
   if (driver.campaignId) {
-    const detached = await isCampaignDriverDetached(driver.campaignId, driver.id, driver.driverCampaignId);
-    campaign = detached ? null : await readCampaignById(driver.campaignId);
+    const detached = await atEvidenceStage('lookup_driver', () =>
+      isCampaignDriverDetached(driver.campaignId, driver.id, driver.driverCampaignId),
+    );
+    campaign = detached
+      ? null
+      : await atEvidenceStage('lookup_driver', () => readCampaignById(driver.campaignId));
     if (!campaign) {
       evidenceDriver = { ...driver, campaignId: '', driverCampaignId: '' };
     }
@@ -285,15 +346,17 @@ export async function registerAgentEvidence(input = {}) {
     input.evidence_type || input.evidenceType || caption || 'desconhecido',
   );
 
-  const claim = await claimMessage({
-    messageId,
-    phone,
-    driver: evidenceDriver,
-    evidenceType,
-    receivedAt,
-    chatId,
-    caption,
-  });
+  const claim = await atEvidenceStage('duplicate_check', () =>
+    claimMessage({
+      messageId,
+      phone,
+      driver: evidenceDriver,
+      evidenceType,
+      receivedAt,
+      chatId,
+      caption,
+    }),
+  );
   if (!claim.claimed) {
     return {
       success: true,
@@ -314,23 +377,29 @@ export async function registerAgentEvidence(input = {}) {
     } : null;
 
     if (!drive) {
-      const image = await runWorkload('external', 'agent-evidence:image-download', () =>
-        downloadRemoteImage(imageUrl),
+      const image = await atEvidenceStage('download_image', () =>
+        runWorkload('external', 'agent-evidence:image-download', () =>
+          downloadRemoteImage(imageUrl, {
+            headersForUrl: gptMakerMediaHeadersForUrl,
+          }),
+        ),
       );
-      drive = await uploadAgentEvidenceImage({
-        ...image,
-        campaign: campaign
-          ? {
-              id: String(campaign.id || campaign._id || evidenceDriver.campaignId),
-              name: campaign.name || campaign.title || 'Campanha',
-            }
-          : null,
-        driver: evidenceDriver,
-        messageId,
-        receivedAt,
-      });
+      drive = await atEvidenceStage('upload_google_drive', () =>
+        uploadAgentEvidenceImage({
+          ...image,
+          campaign: campaign
+            ? {
+                id: String(campaign.id || campaign._id || evidenceDriver.campaignId),
+                name: campaign.name || campaign.title || 'Campanha',
+              }
+            : null,
+          driver: evidenceDriver,
+          messageId,
+          receivedAt,
+        }),
+      );
       try {
-        await markUploaded(claim.id, drive);
+        await atEvidenceStage('save_mongo', () => markUploaded(claim.id, drive));
       } catch (error) {
         try {
           await deleteAgentEvidenceDriveFile(drive.fileId);
@@ -350,7 +419,7 @@ export async function registerAgentEvidence(input = {}) {
     } catch {
       sourceHost = null;
     }
-    await markReceived(claim.id, sourceHost);
+    await atEvidenceStage('save_mongo', () => markReceived(claim.id, sourceHost));
     return { success: true, duplicate: false, safe_reply: SUCCESS_REPLY };
   } catch (error) {
     await markFailed(claim.id, error);

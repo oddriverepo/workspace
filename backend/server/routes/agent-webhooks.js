@@ -23,6 +23,7 @@ import { registerAgentEvidence } from '../services/agent-evidence.js';
 import {
   normalizeGptMakerNewMessage,
   sanitize,
+  summarizeGptMakerImageItem,
   summarizeGptMakerWebhookPayload,
 } from '../services/agent-evidence-webhook.js';
 import { normalizeEvidencePhone } from '../services/agent-evidence-utils.js';
@@ -319,6 +320,7 @@ router.post('/evidences/on-new-message-debug', (req, res) => {
 
 function evidenceEventLog(payload, extra = {}) {
   const snapshot = summarizeGptMakerWebhookPayload(payload || {});
+  const imageItem = summarizeGptMakerImageItem(payload || {});
   console.info(
     '[agent][evidence][on-new-message][event]',
     JSON.stringify({
@@ -327,11 +329,34 @@ function evidenceEventLog(payload, extra = {}) {
       has_messageId: snapshot.has_messageId,
       images_count: snapshot.images_count,
       role: snapshot.role || snapshot.message_role || 'unknown',
+      ...imageItem,
       ignored_reason: extra.ignored_reason || null,
       debug_reason: extra.debug_reason || null,
+      stage: extra.stage || null,
+      status_code: extra.status_code || null,
+      error_message: extra.error_message || null,
       processing_result: extra.processing_result || 'received',
     }),
   );
+}
+
+function evidenceErrorStatus(error) {
+  const status = Number(
+    error?.response?.status
+    ?? error?.upstreamStatus
+    ?? error?.status
+    ?? error?.statusCode
+    ?? 500,
+  );
+  return Number.isInteger(status) && status >= 100 && status <= 599 ? status : 500;
+}
+
+function safeEvidenceErrorMessage(error) {
+  return String(error?.message || 'Falha no processamento')
+    .replace(/https?:\/\/\S+/gi, '[REDACTED_URL]')
+    .replace(/Bearer\s+\S+/gi, 'Bearer [REDACTED]')
+    .replace(/\b\d{9,15}\b/g, '[REDACTED_NUMBER]')
+    .slice(0, 300);
 }
 
 function missingEvidenceEventFields(input = {}) {
@@ -349,7 +374,26 @@ function missingEvidenceEventFields(input = {}) {
  * enviadas pelo usuario sao confirmadas e ignoradas sem efeitos colaterais.
  */
 router.post('/evidences/on-new-message', async (req, res) => {
-  const event = normalizeGptMakerNewMessage(req.body || {});
+  let event;
+  try {
+    event = normalizeGptMakerNewMessage(req.body || {});
+  } catch (error) {
+    const status = evidenceErrorStatus(error);
+    evidenceEventLog(req.body, {
+      debug_reason: 'payload_normalization_failed',
+      stage: 'resolve_payload',
+      status_code: status,
+      error_message: safeEvidenceErrorMessage(error),
+      processing_result: 'failed',
+    });
+    return res.status(400).json({
+      success: false,
+      processed: false,
+      debug_reason: 'payload_normalization_failed',
+      stage: 'resolve_payload',
+      safe_reply: 'Nao consegui processar essa imagem. Vou encaminhar para conferencia da equipe.',
+    });
+  }
   if (!event.accepted) {
     evidenceEventLog(req.body, {
       ignored_reason: event.reason,
@@ -368,12 +412,14 @@ router.post('/evidences/on-new-message', async (req, res) => {
     const debugReason = `missing_${missingFields.join('_')}`;
     evidenceEventLog(req.body, {
       debug_reason: debugReason,
+      stage: 'resolve_payload',
       processing_result: 'missing_required_fields',
     });
     return res.json({
       success: false,
       processed: false,
       debug_reason: debugReason,
+      stage: 'resolve_payload',
       safe_reply: 'Nao consegui processar essa imagem. Vou encaminhar para conferencia da equipe.',
     });
   }
@@ -390,19 +436,35 @@ router.post('/evidences/on-new-message', async (req, res) => {
       ...result,
     });
   } catch (error) {
-    const status = Number(error?.status || error?.statusCode || 500);
-    const clientError = status >= 400 && status < 500;
-    const debugReason = clientError ? 'processing_client_error' : 'processing_server_error';
+    const status = evidenceErrorStatus(error);
+    const stage = String(error?.evidenceStage || 'resolve_payload');
+    const errorMessage = safeEvidenceErrorMessage(error);
+    const payloadError = stage === 'resolve_payload' && status >= 400 && status < 500;
+    const responseStatus = payloadError ? status : 500;
+    const debugReason = `${stage}_failed`;
     evidenceEventLog(req.body, {
       debug_reason: debugReason,
+      stage,
+      status_code: status,
+      error_message: errorMessage,
       processing_result: 'failed',
     });
-    console.error('[agent][evidence][on-new-message] erro:', error?.message || error);
-    return res.status(clientError ? status : 500).json({
+    console.error(
+      '[agent][evidence][on-new-message][failure]',
+      JSON.stringify({
+        processing_result: 'failed',
+        debug_reason: debugReason,
+        stage,
+        status_code: status,
+        error_message: errorMessage,
+      }),
+    );
+    return res.status(responseStatus).json({
       success: false,
       processed: false,
       debug_reason: debugReason,
-      safe_reply: clientError
+      stage,
+      safe_reply: payloadError
         ? 'Nao consegui processar essa imagem. Vou encaminhar para conferencia da equipe.'
         : 'Nao consegui salvar essa imagem agora. Tente novamente em alguns instantes.',
     });
