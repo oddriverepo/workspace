@@ -44,9 +44,48 @@ function timingSafeStringEqual(a, b) {
   }
 }
 
-function authenticateAgent(req, res, next) {
-  const secret = process.env.AGENT_WEBHOOK_SECRET;
-  if (!secret || String(secret).trim().length < 16) {
+function isEvidenceEventRoute(req) {
+  const path = String(req.path || '').replace(/\/+$/, '');
+  return path === '/evidences/on-new-message'
+    || path === '/evidences/on-new-message-debug';
+}
+
+function querySecretValues(req) {
+  if (!isEvidenceEventRoute(req)) return [];
+  return [req.query?.secret, req.query?.webhook_secret]
+    .filter(value => typeof value === 'string' || typeof value === 'number')
+    .map(value => String(value).trim())
+    .filter(Boolean);
+}
+
+function removeSecretFromUrl(value) {
+  const raw = String(value || '');
+  if (!raw.includes('?')) return raw;
+  try {
+    const parsed = new URL(raw, 'http://localhost');
+    parsed.searchParams.delete('secret');
+    parsed.searchParams.delete('webhook_secret');
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return raw
+      .replace(/([?&])(secret|webhook_secret)=[^&#]*/gi, '$1')
+      .replace(/[?&]+$/, '')
+      .replace('?&', '?');
+  }
+}
+
+function clearQuerySecrets(req) {
+  if (req.query && typeof req.query === 'object') {
+    delete req.query.secret;
+    delete req.query.webhook_secret;
+  }
+  req.url = removeSecretFromUrl(req.url);
+  req.originalUrl = removeSecretFromUrl(req.originalUrl);
+}
+
+export function authenticateAgent(req, res, next) {
+  const secret = String(process.env.AGENT_WEBHOOK_SECRET || '').trim();
+  if (secret.length < 16) {
     return res.status(503).json({ error: 'Agent webhook not configured' });
   }
   const auth = String(req.headers['authorization'] || '');
@@ -54,17 +93,28 @@ function authenticateAgent(req, res, next) {
   const headerSecret = String(
     req.headers['x-agent-webhook-secret'] || req.headers['x-webhook-secret'] || '',
   ).trim();
-  const presentedSecret = match?.[1]?.trim() || headerSecret;
-  if (!presentedSecret) {
-    return res.status(401).json({ error: 'Missing bearer token' });
+  const presentedSecrets = [
+    match?.[1]?.trim(),
+    headerSecret,
+    ...querySecretValues(req),
+  ].filter(Boolean);
+  if (!presentedSecrets.length) {
+    return res.status(401).json({ error: 'Missing webhook secret' });
   }
-  if (!timingSafeStringEqual(presentedSecret, String(secret))) {
+  if (!presentedSecrets.some(value => timingSafeStringEqual(value, secret))) {
     return res.status(401).json({ error: 'Invalid token' });
   }
+  clearQuerySecrets(req);
   next();
 }
 
 // ── Rate limit (por IP, antes do auth) ───────────────────────────────
+
+function positiveIntegerEnv(name, fallback, { min = 1, max = 10_000 } = {}) {
+  const parsed = Number.parseInt(String(process.env[name] || ''), 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
+}
 
 const agentLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -72,9 +122,23 @@ const agentLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Rate limit exceeded' },
+  skip: isEvidenceEventRoute,
+});
+
+const evidenceEventLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: positiveIntegerEnv('AGENT_EVIDENCE_EVENT_RATE_LIMIT_PER_MINUTE', 300, {
+    min: 60,
+    max: 3_000,
+  }),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Evidence event rate limit exceeded' },
+  skip: req => !isEvidenceEventRoute(req),
 });
 
 router.use(agentLimiter);
+router.use(evidenceEventLimiter);
 router.use(authenticateAgent);
 
 // ── Helpers de safe_reply ─────────────────────────────────────────────

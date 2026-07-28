@@ -72,9 +72,21 @@ pessoais, use temporariamente:
 `POST /api/agent/evidences/on-new-message-debug`
 
 As duas rotas aceitam `Authorization: Bearer <AGENT_WEBHOOK_SECRET>` ou o
-cabeçalho `X-Agent-Webhook-Secret`. A rota de diagnóstico registra apenas a
-presença dos identificadores, o tipo da mensagem e a categoria do remetente.
-Ela nunca registra telefone, URL da imagem, token ou corpo completo.
+cabeçalho `X-Agent-Webhook-Secret`. Como o evento automático do GPT Maker não
+permite configurar cabeçalhos, somente essas duas rotas também aceitam
+`?secret=<AGENT_WEBHOOK_SECRET>` ou
+`?webhook_secret=<AGENT_WEBHOOK_SECRET>`. O segredo é removido da URL da
+requisição após a autenticação e o logger HTTP da aplicação não registra query
+strings.
+
+Os eventos automáticos possuem limite separado das consultas do agente. O
+valor padrão é 300 eventos por minuto, configurável por
+`AGENT_EVIDENCE_EVENT_RATE_LIMIT_PER_MINUTE`, para que mensagens simultâneas do
+mesmo IP do GPT Maker não consumam o limite das consultas convencionais.
+
+A rota de diagnóstico registra apenas a presença dos identificadores, o tipo
+da mensagem e a categoria do remetente. Ela nunca registra telefone, URL da
+imagem, token ou corpo completo.
 
 O evento definitivo:
 
@@ -96,6 +108,7 @@ GOOGLE_DRIVE_EVIDENCE_FOLDER_ID=
 GPTMAKER_API_TOKEN=
 AGENT_EVIDENCE_MAX_IMAGE_BYTES=12582912
 AGENT_EVIDENCE_DOWNLOAD_TIMEOUT_MS=20000
+AGENT_EVIDENCE_EVENT_RATE_LIMIT_PER_MINUTE=300
 ```
 
 O Google OAuth já utilizado pelo gerador precisa estar conectado e possuir o
