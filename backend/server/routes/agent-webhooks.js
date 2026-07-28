@@ -22,7 +22,7 @@ import {
 import { registerAgentEvidence } from '../services/agent-evidence.js';
 import {
   normalizeGptMakerNewMessage,
-  summarizeGptMakerWebhookPayload,
+  sanitize,
 } from '../services/agent-evidence-webhook.js';
 import { normalizeEvidencePhone } from '../services/agent-evidence-utils.js';
 import { isCampaignDriverDetached } from '../services/mongo.js';
@@ -296,13 +296,24 @@ router.post('/evidences/register-image', async (req, res) => {
 /**
  * POST /api/agent/evidences/on-new-message-debug
  *
- * Diagnostico temporario do payload bruto do onNewMessage. Nunca registra
- * valores, apenas a presenca dos campos necessarios e categorias seguras.
+ * Diagnostico temporario do payload bruto do onNewMessage. Registra somente
+ * um snapshot estrutural sanitizado; nunca registra credenciais ou PII completa.
  */
 router.post('/evidences/on-new-message-debug', (req, res) => {
-  const summary = summarizeGptMakerWebhookPayload(req.body || {});
-  console.info('[agent][evidence][on-new-message-debug]', JSON.stringify(summary));
-  return res.json({ success: true, received: true, fields: summary });
+  const body = req.body;
+  const snapshot = {
+    content_type: String(req.headers['content-type'] || '').slice(0, 200),
+    body_type: typeof body,
+    top_level_keys: body && typeof body === 'object'
+      ? Object.keys(body)
+      : [],
+    sanitized_body: sanitize(body ?? null),
+  };
+  console.info(
+    '[agent][evidence][on-new-message-debug][payload]',
+    JSON.stringify(snapshot),
+  );
+  return res.json({ success: true, received: true });
 });
 
 /**

@@ -84,9 +84,13 @@ valor padrão é 300 eventos por minuto, configurável por
 `AGENT_EVIDENCE_EVENT_RATE_LIMIT_PER_MINUTE`, para que mensagens simultâneas do
 mesmo IP do GPT Maker não consumam o limite das consultas convencionais.
 
-A rota de diagnóstico registra apenas a presença dos identificadores, o tipo
-da mensagem e a categoria do remetente. Ela nunca registra telefone, URL da
-imagem, token ou corpo completo.
+Temporariamente, a rota de diagnóstico registra um snapshot sanitizado do
+corpo recebido para mapear a estrutura real do evento. O snapshot mantém nomes
+de chaves e a estrutura de objetos, limita arrays aos três primeiros itens e
+mascara strings, telefones, URLs, mídias e identificadores longos. Credenciais,
+segredos, senhas e dados pessoais conhecidos são substituídos por
+`[REDACTED]`. O valor do segredo da URL e os cabeçalhos de autenticação nunca
+são incluídos nesse log.
 
 O evento definitivo:
 

@@ -1,13 +1,62 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  maskString,
   normalizeGptMakerNewMessage,
+  sanitize,
   summarizeGptMakerWebhookPayload,
 } from './agent-evidence-webhook.js';
 
 const CHAT_ID = '3F58791EFB8AE06F57AAF21652EF4739-554896309676';
 const MESSAGE_ID = '3F6CD17E40C530BCB7A09607577B7903';
 const IMAGE_URL = 'https://files.example/signed/private-image.jpg?token=secret';
+
+test('mascara strings longas preservando uma amostra estrutural', () => {
+  assert.equal(maskString('12345678'), '12345678');
+  assert.equal(
+    maskString('1234567890'),
+    '1234...[10 chars]...7890',
+  );
+});
+
+test('sanitiza payload de diagnostico sem expor valores sensiveis', () => {
+  const payload = {
+    event: 'onNewMessage',
+    authorization: 'Bearer segredo-super-secreto',
+    phone: '554896309676',
+    contact: {
+      name: 'Joao',
+      id: '3F58791EFB8AE06F57AAF21652EF4739',
+    },
+    message: {
+      role: 'user',
+      type: 'IMAGE',
+      image: {
+        imageUrl: IMAGE_URL,
+        mediaType: 'IMAGE',
+      },
+      text: 'frontal do veiculo enviada pelo motorista',
+    },
+    items: ['primeiro-item', 'segundo-item', 'terceiro-item', 'quarto-item'],
+  };
+
+  const result = sanitize(payload);
+  const serialized = JSON.stringify(result);
+
+  assert.equal(result.event, 'onNe...[12 chars]...sage');
+  assert.equal(result.authorization, '[REDACTED]');
+  assert.equal(result.contact.name, '[REDACTED]');
+  assert.equal(result.message.role, 'user');
+  assert.equal(result.message.type, 'IMAGE');
+  assert.equal(result.message.image.mediaType, 'IMAGE');
+  assert.equal(result.items.length, 3);
+  assert.equal(serialized.includes('554896309676'), false);
+  assert.equal(serialized.includes(IMAGE_URL), false);
+  assert.equal(serialized.includes('segredo-super-secreto'), false);
+  assert.equal(serialized.includes('3F58791EFB8AE06F57AAF21652EF4739'), false);
+  assert.equal(serialized.includes('frontal do veiculo enviada pelo motorista'), false);
+  assert.equal(serialized.includes('quarto-item'), false);
+});
 
 test('normaliza imagem recebida e extrai telefone do chatId', () => {
   const result = normalizeGptMakerNewMessage({

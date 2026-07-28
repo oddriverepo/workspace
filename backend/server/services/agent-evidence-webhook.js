@@ -9,6 +9,94 @@ const MAX_ID_LENGTH = 200;
 const MAX_URL_LENGTH = 4096;
 const MAX_TEXT_LENGTH = 1000;
 
+export function maskString(value) {
+  const text = String(value ?? '');
+
+  if (text.length <= 8) {
+    return text;
+  }
+
+  return `${text.slice(0, 4)}...[${text.length} chars]...${text.slice(-4)}`;
+}
+
+function sensitiveKeyMode(key) {
+  const lower = String(key || '').toLowerCase();
+
+  if (
+    lower.includes('authorization')
+    || lower.includes('token')
+    || lower.includes('secret')
+    || lower.includes('password')
+  ) {
+    return 'redact';
+  }
+
+  if (
+    lower.includes('phone')
+    || lower.includes('whatsapp')
+    || lower.includes('telefone')
+    || lower.includes('url')
+    || lower.includes('image')
+    || lower.includes('media')
+  ) {
+    return 'mask';
+  }
+
+  if (
+    lower.includes('email')
+    || lower.includes('e-mail')
+    || lower.includes('name')
+    || lower.includes('nome')
+    || lower.includes('username')
+    || lower.includes('cpf')
+    || lower.includes('pix')
+    || lower.includes('address')
+    || lower.includes('endereco')
+    || lower.includes('city')
+    || lower.includes('cidade')
+  ) {
+    return 'redact';
+  }
+
+  return 'normal';
+}
+
+function sanitizeValue(value, inheritedMode = 'normal') {
+  if (inheritedMode === 'redact') return '[REDACTED]';
+
+  if (Array.isArray(value)) {
+    return value
+      .slice(0, 3)
+      .map(item => sanitizeValue(item, inheritedMode));
+  }
+
+  if (value && typeof value === 'object') {
+    const out = {};
+
+    for (const [key, val] of Object.entries(value)) {
+      const keyMode = sensitiveKeyMode(key);
+      const mode = keyMode === 'normal' ? inheritedMode : keyMode;
+      out[key] = sanitizeValue(val, mode);
+    }
+
+    return out;
+  }
+
+  if (typeof value === 'string' || inheritedMode === 'mask') {
+    return maskString(value);
+  }
+
+  return value;
+}
+
+/**
+ * Produz um snapshot estrutural para diagnóstico sem expor valores sensíveis.
+ * Arrays são limitados aos três primeiros itens; nomes das chaves são mantidos.
+ */
+export function sanitize(value) {
+  return sanitizeValue(value);
+}
+
 function isRecord(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
