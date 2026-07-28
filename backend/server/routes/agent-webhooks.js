@@ -352,11 +352,19 @@ function evidenceErrorStatus(error) {
 }
 
 function safeEvidenceErrorMessage(error) {
-  return String(error?.message || 'Falha no processamento')
+  return String(error?.googleMessage || error?.message || 'Falha no processamento')
     .replace(/https?:\/\/\S+/gi, '[REDACTED_URL]')
     .replace(/Bearer\s+\S+/gi, 'Bearer [REDACTED]')
     .replace(/\b\d{9,15}\b/g, '[REDACTED_NUMBER]')
     .slice(0, 300);
+}
+
+function safeDiagnosticText(value) {
+  return String(value || '')
+    .replace(/https?:\/\/\S+/gi, '[REDACTED_URL]')
+    .replace(/Bearer\s+\S+/gi, 'Bearer [REDACTED]')
+    .replace(/\b\d{9,15}\b/g, '[REDACTED_NUMBER]')
+    .slice(0, 160);
 }
 
 function missingEvidenceEventFields(input = {}) {
@@ -446,7 +454,11 @@ router.post('/evidences/on-new-message', async (req, res) => {
       debug_reason: debugReason,
       stage,
       status_code: status,
-      error_message: errorMessage,
+      error_message: [
+        errorMessage,
+        error?.driveOperation ? `drive_operation=${safeDiagnosticText(error.driveOperation)}` : '',
+        error?.googleReason ? `google_reason=${safeDiagnosticText(error.googleReason)}` : '',
+      ].filter(Boolean).join(' | '),
       processing_result: 'failed',
     });
     console.error(
@@ -457,6 +469,8 @@ router.post('/evidences/on-new-message', async (req, res) => {
         stage,
         status_code: status,
         error_message: errorMessage,
+        drive_operation: safeDiagnosticText(error?.driveOperation || ''),
+        google_reason: safeDiagnosticText(error?.googleReason || ''),
       }),
     );
     return res.status(responseStatus).json({

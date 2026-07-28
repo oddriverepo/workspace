@@ -53,12 +53,14 @@ async function accessToken() {
 
 async function driveRequest(config, retry = true) {
   const token = await accessToken();
+  const driveOperation = config.driveOperation || 'drive_request';
   try {
     return await axios({
       timeout: 30_000,
       maxBodyLength: Infinity,
       maxContentLength: Infinity,
       ...config,
+      driveOperation: undefined,
       headers: {
         ...(config.headers || {}),
         Authorization: `Bearer ${token}`,
@@ -69,6 +71,11 @@ async function driveRequest(config, retry = true) {
       await googleAuthService.refreshToken();
       return driveRequest(config, false);
     }
+    error.driveOperation = error.driveOperation || driveOperation;
+    const googleError = error?.response?.data?.error;
+    const firstError = Array.isArray(googleError?.errors) ? googleError.errors[0] : null;
+    error.googleReason = String(firstError?.reason || googleError?.status || '').slice(0, 120);
+    error.googleMessage = String(googleError?.message || error.message || '').slice(0, 300);
     throw error;
   }
 }
@@ -86,6 +93,7 @@ async function ensureFolder(parentId, name) {
       'trashed = false',
     ].join(' and ');
     const found = await driveRequest({
+      driveOperation: 'find_folder',
       method: 'GET',
       url: `${DRIVE_API}/files`,
       params: {
@@ -99,6 +107,7 @@ async function ensureFolder(parentId, name) {
     let folderId = found.data?.files?.[0]?.id;
     if (!folderId) {
       const created = await driveRequest({
+        driveOperation: 'create_folder',
         method: 'POST',
         url: `${DRIVE_API}/files`,
         params: { fields: 'id,name', supportsAllDrives: true },
@@ -138,6 +147,7 @@ async function uploadMultipart({ metadata, buffer, fileName, mimeType }, retry =
   form.append('file', buffer, { filename: fileName, contentType: mimeType, knownLength: buffer.length });
   try {
     return await driveRequest({
+      driveOperation: 'upload_file',
       method: 'POST',
       url: `${DRIVE_UPLOAD_API}/files`,
       params: { uploadType: 'multipart', fields: 'id,name,mimeType,size', supportsAllDrives: true },
@@ -162,6 +172,7 @@ async function findExistingEvidenceFile(messageId) {
     'trashed = false',
   ].join(' and ');
   const found = await driveRequest({
+    driveOperation: 'find_existing_evidence_file',
     method: 'GET',
     url: `${DRIVE_API}/files`,
     params: {
@@ -173,6 +184,14 @@ async function findExistingEvidenceFile(messageId) {
     },
   });
   return found.data?.files?.[0] || null;
+}
+
+function compactProperties(properties) {
+  return Object.fromEntries(
+    Object.entries(properties || {})
+      .map(([key, value]) => [key, String(value ?? '').trim().slice(0, 120)])
+      .filter(([, value]) => value.length > 0),
+  );
 }
 
 export async function uploadAgentEvidenceImage({
@@ -220,13 +239,13 @@ export async function uploadAgentEvidenceImage({
     const metadata = {
       name: fileName,
       parents: [dayFolderId],
-      appProperties: {
+      appProperties: compactProperties({
         source: 'gptmaker',
-        messageId: String(messageId).slice(0, 120),
-        campaignId: String(campaign?.id || driver?.campaignId || '').slice(0, 120),
-        driverId: String(driver?.id || driver?._id || '').slice(0, 120),
+        messageId,
+        campaignId: campaign?.id || driver?.campaignId,
+        driverId: driver?.id || driver?._id,
         evidenceContext: hasCampaign ? 'campaign' : 'driver_validation',
-      },
+      }),
     };
     const uploaded = await uploadMultipart({ metadata, buffer, fileName, mimeType });
     const fileId = uploaded.data?.id;
@@ -250,9 +269,10 @@ export async function openAgentEvidenceDriveStream(fileId) {
   }
   requireConfiguration();
   const response = await runWorkload('external', 'agent-evidence:drive-download', () =>
-    driveRequest({
-      method: 'GET',
-      url: `${DRIVE_API}/files/${encodeURIComponent(fileId)}`,
+      driveRequest({
+        driveOperation: 'download_file',
+        method: 'GET',
+        url: `${DRIVE_API}/files/${encodeURIComponent(fileId)}`,
       params: { alt: 'media', supportsAllDrives: true },
       responseType: 'stream',
     }),
@@ -270,6 +290,7 @@ export async function deleteAgentEvidenceDriveFile(fileId) {
   try {
     await runWorkload('external', 'agent-evidence:drive-delete', () =>
       driveRequest({
+        driveOperation: 'delete_file',
         method: 'DELETE',
         url: `${DRIVE_API}/files/${encodeURIComponent(fileId)}`,
         params: { supportsAllDrives: true },
