@@ -51,6 +51,34 @@ async function accessToken() {
   return token;
 }
 
+function tagDriveError(error, operation) {
+  const target = error instanceof Error
+    ? error
+    : new Error(String(error || 'Falha na operacao do Google Drive'));
+  target.driveOperation = target.driveOperation || operation;
+  const googleError = target?.response?.data?.error;
+  const firstError = Array.isArray(googleError?.errors) ? googleError.errors[0] : null;
+  target.googleReason = target.googleReason
+    || String(firstError?.reason || googleError?.status || '').slice(0, 120);
+  target.googleMessage = target.googleMessage
+    || String(googleError?.message || target.message || '').slice(0, 300);
+  return target;
+}
+
+function logDriveFailure(error, operation) {
+  const tagged = tagDriveError(error, operation);
+  console.error(
+    '[agent][evidence][drive][failure]',
+    JSON.stringify({
+      drive_operation: tagged.driveOperation || operation,
+      status_code: Number(tagged?.response?.status || tagged?.status || tagged?.statusCode || 0) || null,
+      google_reason: tagged.googleReason || '',
+      google_message: tagged.googleMessage || '',
+    }),
+  );
+  return tagged;
+}
+
 async function driveRequest(config, retry = true) {
   const token = await accessToken();
   const driveOperation = config.driveOperation || 'drive_request';
@@ -71,12 +99,7 @@ async function driveRequest(config, retry = true) {
       await googleAuthService.refreshToken();
       return driveRequest(config, false);
     }
-    error.driveOperation = error.driveOperation || driveOperation;
-    const googleError = error?.response?.data?.error;
-    const firstError = Array.isArray(googleError?.errors) ? googleError.errors[0] : null;
-    error.googleReason = String(firstError?.reason || googleError?.status || '').slice(0, 120);
-    error.googleMessage = String(googleError?.message || error.message || '').slice(0, 300);
-    throw error;
+    throw tagDriveError(error, driveOperation);
   }
 }
 
@@ -131,7 +154,7 @@ async function ensureFolder(parentId, name) {
     return folderId;
   } catch (error) {
     if (folderCache.get(cacheKey) === operation) folderCache.delete(cacheKey);
-    throw error;
+    throw logDriveFailure(error, error?.driveOperation || 'ensure_folder');
   }
 }
 
@@ -159,7 +182,7 @@ async function uploadMultipart({ metadata, buffer, fileName, mimeType }, retry =
       await googleAuthService.refreshToken();
       return uploadMultipart({ metadata, buffer, fileName, mimeType }, false);
     }
-    throw error;
+    throw logDriveFailure(error, error?.driveOperation || 'upload_file');
   }
 }
 
