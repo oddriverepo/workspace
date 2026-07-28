@@ -10,7 +10,7 @@ test('rejeita telefone invalido antes de consultar banco ou Drive', async () => 
       image_url: 'https://files.example/image.jpg',
       media_type: 'IMAGE',
     }),
-    (error) => error?.status === 400 && /phone, message_id/.test(error.message),
+    (error) => error?.status === 400 && /phone ou chat_id/.test(error.message),
   );
 });
 

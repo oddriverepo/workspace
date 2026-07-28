@@ -54,6 +54,22 @@ export function buildBrazilPhoneSuffixes(value) {
   return [...new Set(suffixes)];
 }
 
+export function extractPhoneFromGptMakerIdentifiers(...values) {
+  for (const value of values) {
+    const raw = String(value || '').trim();
+    if (!raw) continue;
+    const candidates = [
+      raw.match(/(?:^|[-_:@])(\d{10,13})(?:@[^@]+)?$/)?.[1],
+      /^\d{10,13}$/.test(raw) ? raw : '',
+    ].filter(Boolean);
+    for (const candidate of candidates) {
+      const phone = normalizeEvidencePhone(candidate);
+      if (phone) return phone;
+    }
+  }
+  return '';
+}
+
 export function mapEvidenceType(value) {
   const normalized = String(value || '')
     .trim()
@@ -312,6 +328,58 @@ function extractMessageImageUrl(message) {
   return candidates.find(value => typeof value === 'string' && value.startsWith('https://')) || '';
 }
 
+function extractMessagePhone(message, chatId = '') {
+  const candidates = [
+    message?.phone,
+    message?.phoneNumber,
+    message?.phone_number,
+    message?.whatsappPhone,
+    message?.whatsapp_phone,
+    message?.senderPhone,
+    message?.sender_phone,
+    message?.contact?.phone,
+    message?.contact?.phoneNumber,
+    message?.sender?.phone,
+    message?.sender?.phoneNumber,
+    message?.metadata?.phone,
+    message?.metadata?.whatsappPhone,
+  ];
+  for (const candidate of candidates) {
+    const phone = normalizeEvidencePhone(candidate);
+    if (phone) return phone;
+  }
+  return extractPhoneFromGptMakerIdentifiers(chatId);
+}
+
+function messageIdOf(message) {
+  return String(message?.id ?? message?.messageId ?? message?.message_id ?? '').trim();
+}
+
+function messageIsUserImage(message) {
+  const role = String(
+    message?.role ?? message?.senderRole ?? message?.sender_role ?? message?.direction ?? '',
+  ).trim().toLowerCase();
+  const type = String(
+    message?.type ?? message?.messageType ?? message?.message_type ?? message?.mediaType ?? '',
+  ).trim().toUpperCase();
+  const fromMe = message?.fromMe ?? message?.from_me ?? message?.isFromMe ?? message?.is_from_me;
+  const isAgent = fromMe === true
+    || ['assistant', 'agent', 'bot', 'system', 'outbound', 'outgoing'].includes(role);
+  const isUser = fromMe === false
+    || ['user', 'customer', 'client', 'contact', 'lead', 'inbound', 'incoming'].includes(role);
+  const isImage = type === 'IMAGE' || type === 'PHOTO' || Boolean(extractMessageImageUrl(message));
+  return !isAgent && isUser && isImage;
+}
+
+function messageTimeValue(message) {
+  const raw = message?.time ?? message?.messageTime ?? message?.message_time
+    ?? message?.createdAt ?? message?.created_at ?? 0;
+  const numeric = Number(raw);
+  if (Number.isFinite(numeric)) return numeric;
+  const parsed = new Date(raw).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 export async function resolveGptMakerImage({ chatId, messageId, fetchImpl = fetch }) {
   const token = String(process.env.GPTMAKER_API_TOKEN || '').trim();
   if (!token) throw Object.assign(new Error('API do GPT Maker não configurada.'), { status: 503 });
@@ -340,16 +408,22 @@ export async function resolveGptMakerImage({ chatId, messageId, fetchImpl = fetc
     throw Object.assign(new Error('Não foi possível consultar a mídia no GPT Maker.'), { status: 502 });
   }
   const payload = await response.json();
-  const target = responseItems(payload).find(item =>
-    String(item?.id ?? item?.messageId ?? item?.message_id ?? '') === String(messageId),
-  );
+  const messages = responseItems(payload);
+  const target = messageId
+    ? messages.find(item => messageIdOf(item) === String(messageId) && messageIsUserImage(item))
+    : messages
+      .filter(messageIsUserImage)
+      .sort((a, b) => messageTimeValue(b) - messageTimeValue(a))[0];
   const imageUrl = extractMessageImageUrl(target);
   if (!target || !imageUrl) {
     throw Object.assign(new Error('Imagem não localizada na mensagem informada.'), { status: 404 });
   }
   return {
+    messageId: messageIdOf(target),
     imageUrl,
+    phone: extractMessagePhone(target, chatId),
     fileName: target.fileName || target.file_name || target.file?.name || '',
     messageTime: target.time || target.createdAt || target.created_at || null,
+    caption: String(target.caption || target.text || '').trim().slice(0, 1000),
   };
 }

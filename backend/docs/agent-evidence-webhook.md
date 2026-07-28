@@ -60,6 +60,34 @@ Tipos reconhecidos:
 O agente deve responder ao motorista somente com o campo `safe_reply`.
 Os dois endpoints usam a mesma autenticação Bearer descrita acima.
 
+### Evento automático do GPT Maker
+
+O processamento principal das imagens recebidas usa:
+
+`POST /api/agent/evidences/on-new-message`
+
+Para descobrir o formato real enviado pela conta do GPT Maker sem expor dados
+pessoais, use temporariamente:
+
+`POST /api/agent/evidences/on-new-message-debug`
+
+As duas rotas aceitam `Authorization: Bearer <AGENT_WEBHOOK_SECRET>` ou o
+cabeçalho `X-Agent-Webhook-Secret`. A rota de diagnóstico registra apenas a
+presença dos identificadores, o tipo da mensagem e a categoria do remetente.
+Ela nunca registra telefone, URL da imagem, token ou corpo completo.
+
+O evento definitivo:
+
+1. ignora mensagens do agente e mensagens que não sejam imagens;
+2. extrai telefone, chat e mensagem de formatos conhecidos do payload;
+3. usa o telefone no final do `chatId` quando o campo não vier separado;
+4. consulta a API do GPT Maker quando faltar telefone, `imageUrl` ou
+   `messageId`, reaproveitando uma única resposta para completar os campos;
+5. delega a gravação ao mesmo fluxo idempotente usado por `register-image`.
+
+A rota `register-image` permanece como apoio conversacional. O evento
+`on-new-message` é a fonte principal para capturar a mídia recebida.
+
 ## Variáveis
 
 ```env
@@ -77,7 +105,8 @@ uma rota autenticada do backend.
 ## Comportamento
 
 1. Normaliza o telefone e procura o motorista no mirror local.
-2. Confirma que existe campanha ativa e que o motorista não foi desvinculado.
+2. Usa a campanha ativa quando existir; motorista cadastrado sem campanha
+   também pode enviar imagens para validação.
 3. Reserva `message_id` de forma idempotente.
 4. Valida e baixa a imagem com limite de tamanho e bloqueio de rede privada.
 5. Organiza o arquivo por campanha, motorista e data no Google Drive.

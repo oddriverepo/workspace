@@ -20,6 +20,10 @@ import {
   search_campaigns_by_city,
 } from '../services/mcp/tools.js';
 import { registerAgentEvidence } from '../services/agent-evidence.js';
+import {
+  normalizeGptMakerNewMessage,
+  summarizeGptMakerWebhookPayload,
+} from '../services/agent-evidence-webhook.js';
 import { normalizeEvidencePhone } from '../services/agent-evidence-utils.js';
 import { isCampaignDriverDetached } from '../services/mongo.js';
 import { readCampaignById, readDriverByExactPhone } from '../services/oddrive-sync.js';
@@ -45,12 +49,16 @@ function authenticateAgent(req, res, next) {
   if (!secret || String(secret).trim().length < 16) {
     return res.status(503).json({ error: 'Agent webhook not configured' });
   }
-  const auth = req.headers['authorization'] || '';
+  const auth = String(req.headers['authorization'] || '');
   const match = /^Bearer\s+(.+)$/i.exec(auth.trim());
-  if (!match) {
+  const headerSecret = String(
+    req.headers['x-agent-webhook-secret'] || req.headers['x-webhook-secret'] || '',
+  ).trim();
+  const presentedSecret = match?.[1]?.trim() || headerSecret;
+  if (!presentedSecret) {
     return res.status(401).json({ error: 'Missing bearer token' });
   }
-  if (!timingSafeStringEqual(match[1].trim(), String(secret))) {
+  if (!timingSafeStringEqual(presentedSecret, String(secret))) {
     return res.status(401).json({ error: 'Invalid token' });
   }
   next();
@@ -217,6 +225,50 @@ router.post('/evidences/register-image', async (req, res) => {
       safe_reply: clientError
         ? 'Não consegui processar essa imagem. Verifique os dados e tente novamente.'
         : 'Não consegui salvar essa imagem agora. Tente novamente em alguns instantes.',
+    });
+  }
+});
+
+/**
+ * POST /api/agent/evidences/on-new-message-debug
+ *
+ * Diagnostico temporario do payload bruto do onNewMessage. Nunca registra
+ * valores, apenas a presenca dos campos necessarios e categorias seguras.
+ */
+router.post('/evidences/on-new-message-debug', (req, res) => {
+  const summary = summarizeGptMakerWebhookPayload(req.body || {});
+  console.info('[agent][evidence][on-new-message-debug]', JSON.stringify(summary));
+  return res.json({ success: true, received: true, fields: summary });
+});
+
+/**
+ * POST /api/agent/evidences/on-new-message
+ *
+ * Fonte principal para imagens recebidas. Mensagens que nao sejam imagens
+ * enviadas pelo usuario sao confirmadas e ignoradas sem efeitos colaterais.
+ */
+router.post('/evidences/on-new-message', async (req, res) => {
+  const event = normalizeGptMakerNewMessage(req.body || {});
+  if (!event.accepted) {
+    return res.json({
+      success: true,
+      ignored: true,
+      reason: event.reason,
+    });
+  }
+
+  try {
+    const result = await registerAgentEvidence(event.input);
+    return res.json(result);
+  } catch (error) {
+    const status = Number(error?.status || error?.statusCode || 500);
+    const clientError = status >= 400 && status < 500;
+    console.error('[agent][evidence][on-new-message] erro:', error?.message || error);
+    return res.status(clientError ? status : 500).json({
+      success: false,
+      safe_reply: clientError
+        ? 'Nao consegui processar essa imagem. Vou encaminhar para conferencia da equipe.'
+        : 'Nao consegui salvar essa imagem agora. Tente novamente em alguns instantes.',
     });
   }
 });

@@ -4,6 +4,7 @@ import {
   buildBrazilPhoneSuffixes,
   buildBrazilPhoneVariants,
   detectImageType,
+  extractPhoneFromGptMakerIdentifiers,
   isPrivateAddress,
   mapEvidenceType,
   normalizeEvidencePhone,
@@ -37,6 +38,16 @@ test('gera variantes brasileiras com e sem nono digito', () => {
     '4896309676',
     '554896309676',
   ]);
+});
+
+test('extrai telefone do identificador real de chat do GPT Maker', () => {
+  assert.equal(
+    extractPhoneFromGptMakerIdentifiers(
+      '3F58791EFB8AE06F57AAF21652EF4739-554896309676',
+    ),
+    '554896309676',
+  );
+  assert.equal(extractPhoneFromGptMakerIdentifiers('chat-sem-telefone'), '');
 });
 
 test('nao inventa variante de nono digito para telefone fixo ou celular invalido', () => {
@@ -90,10 +101,18 @@ test('localiza a imagem na resposta de fallback do GPT Maker', async () => {
         json: async () => ({
           data: {
             messages: [
-              { id: 'message-1', imageUrl: 'https://files.example/one.jpg' },
+              {
+                id: 'message-1',
+                role: 'user',
+                type: 'IMAGE',
+                imageUrl: 'https://files.example/one.jpg',
+              },
               {
                 id: 'message-2',
+                role: 'user',
+                type: 'IMAGE',
                 media: { url: 'https://files.example/two.jpg' },
+                contact: { phone: '(48) 99630-9676' },
                 fileName: 'foto.jpg',
                 time: 1784049551189,
               },
@@ -103,9 +122,12 @@ test('localiza a imagem na resposta de fallback do GPT Maker', async () => {
       }),
     });
     assert.deepEqual(result, {
+      messageId: 'message-2',
       imageUrl: 'https://files.example/two.jpg',
+      phone: '5548996309676',
       fileName: 'foto.jpg',
       messageTime: 1784049551189,
+      caption: '',
     });
   } finally {
     if (previousToken === undefined) delete process.env.GPTMAKER_API_TOKEN;
@@ -123,11 +145,63 @@ test('aceita lista direta no campo data do GPT Maker', async () => {
       fetchImpl: async () => ({
         ok: true,
         json: async () => ({
-          data: [{ messageId: 'message-3', image_url: 'https://files.example/three.png' }],
+          data: [{
+            messageId: 'message-3',
+            role: 'user',
+            type: 'IMAGE',
+            image_url: 'https://files.example/three.png',
+          }],
         }),
       }),
     });
     assert.equal(result.imageUrl, 'https://files.example/three.png');
+    assert.equal(result.phone, '');
+  } finally {
+    if (previousToken === undefined) delete process.env.GPTMAKER_API_TOKEN;
+    else process.env.GPTMAKER_API_TOKEN = previousToken;
+  }
+});
+
+test('sem messageId seleciona a imagem mais recente enviada pelo usuario', async () => {
+  const previousToken = process.env.GPTMAKER_API_TOKEN;
+  process.env.GPTMAKER_API_TOKEN = 'token-de-teste';
+  try {
+    const result = await resolveGptMakerImage({
+      chatId: 'chat-3',
+      fetchImpl: async () => ({
+        ok: true,
+        json: async () => ({
+          messages: [
+            {
+              id: 'agent-image',
+              role: 'assistant',
+              type: 'IMAGE',
+              imageUrl: 'https://files.example/agent.jpg',
+              time: 300,
+            },
+            {
+              id: 'old-user-image',
+              role: 'user',
+              type: 'IMAGE',
+              imageUrl: 'https://files.example/old.jpg',
+              time: 100,
+            },
+            {
+              id: 'new-user-image',
+              role: 'user',
+              type: 'IMAGE',
+              imageUrl: 'https://files.example/new.jpg',
+              text: 'traseira',
+              time: 200,
+            },
+          ],
+        }),
+      }),
+    });
+    assert.equal(result.messageId, 'new-user-image');
+    assert.equal(result.imageUrl, 'https://files.example/new.jpg');
+    assert.equal(result.caption, 'traseira');
+    assert.equal(result.phone, '');
   } finally {
     if (previousToken === undefined) delete process.env.GPTMAKER_API_TOKEN;
     else process.env.GPTMAKER_API_TOKEN = previousToken;

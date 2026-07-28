@@ -4,6 +4,7 @@ import { readCampaignById, readDriverByExactPhone } from './oddrive-sync.js';
 import { runWorkload } from './workload-manager.js';
 import {
   downloadRemoteImage,
+  extractPhoneFromGptMakerIdentifiers,
   mapEvidenceType,
   normalizeEvidencePhone,
   resolveGptMakerImage,
@@ -210,23 +211,58 @@ export async function ensureAgentEvidenceIndexes() {
 }
 
 export async function registerAgentEvidence(input = {}) {
-  const phone = normalizeEvidencePhone(input.phone);
-  const messageId = String(input.message_id || input.messageId || '').trim().slice(0, 200);
+  let phone = normalizeEvidencePhone(input.phone);
+  let messageId = String(input.message_id || input.messageId || '').trim().slice(0, 200);
   const chatId = String(input.chat_id || input.chatId || '').trim().slice(0, 200);
+  const contactId = String(input.contact_id || input.contactId || '').trim().slice(0, 200);
   const mediaType = String(input.media_type || input.mediaType || '').trim().toUpperCase();
-  const caption = String(input.caption || '').trim().slice(0, 1000);
-  const evidenceType = mapEvidenceType(input.evidence_type || input.evidenceType);
-  const receivedAt = parseReceivedAt(input.message_time || input.messageTime);
+  let caption = String(input.caption || '').trim().slice(0, 1000);
+  let receivedAt = parseReceivedAt(input.message_time || input.messageTime);
   let imageUrl = String(input.image_url || input.imageUrl || '').trim().slice(0, 4096);
 
-  if (!phone || !messageId || mediaType !== 'IMAGE') {
-    throw Object.assign(new Error('phone, message_id e media_type=IMAGE são obrigatórios.'), { status: 400 });
+  if (!phone) phone = extractPhoneFromGptMakerIdentifiers(chatId, contactId);
+  if (mediaType !== 'IMAGE') {
+    throw Object.assign(new Error('media_type=IMAGE é obrigatório.'), { status: 400 });
   }
   if (!imageUrl && !chatId) {
     throw Object.assign(
       new Error('image_url ou chat_id é obrigatório para localizar a imagem.'),
       { status: 400 },
     );
+  }
+  if (!messageId && !chatId) {
+    throw Object.assign(
+      new Error('message_id ou chat_id é obrigatório para identificar a mensagem.'),
+      { status: 400 },
+    );
+  }
+
+  if (!phone || !imageUrl || !messageId) {
+    if (!chatId) {
+      throw Object.assign(
+        new Error('phone ou chat_id é obrigatório para identificar o motorista.'),
+        { status: 400 },
+      );
+    }
+    const resolved = await runWorkload('external', 'agent-evidence:gptmaker-message', () =>
+      resolveGptMakerImage({ chatId, messageId }),
+    );
+    phone ||= normalizeEvidencePhone(resolved.phone);
+    imageUrl ||= resolved.imageUrl;
+    messageId ||= String(resolved.messageId || '').trim().slice(0, 200);
+    caption ||= String(resolved.caption || '').trim().slice(0, 1000);
+    if (!input.message_time && !input.messageTime && resolved.messageTime) {
+      receivedAt = parseReceivedAt(resolved.messageTime);
+    }
+  }
+  if (!phone) {
+    throw Object.assign(
+      new Error('Não foi possível identificar o telefone pelo evento do GPT Maker.'),
+      { status: 400 },
+    );
+  }
+  if (!messageId) {
+    throw Object.assign(new Error('O GPT Maker não retornou o ID da mensagem.'), { status: 502 });
   }
 
   const rawDriver = await readDriverByExactPhone(phone);
@@ -244,6 +280,10 @@ export async function registerAgentEvidence(input = {}) {
       evidenceDriver = { ...driver, campaignId: '', driverCampaignId: '' };
     }
   }
+
+  const evidenceType = mapEvidenceType(
+    input.evidence_type || input.evidenceType || caption || 'desconhecido',
+  );
 
   const claim = await claimMessage({
     messageId,
@@ -274,12 +314,6 @@ export async function registerAgentEvidence(input = {}) {
     } : null;
 
     if (!drive) {
-      if (!imageUrl) {
-        const resolved = await runWorkload('external', 'agent-evidence:gptmaker-message', () =>
-          resolveGptMakerImage({ chatId, messageId }),
-        );
-        imageUrl = resolved.imageUrl;
-      }
       const image = await runWorkload('external', 'agent-evidence:image-download', () =>
         downloadRemoteImage(imageUrl),
       );
