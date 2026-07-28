@@ -186,10 +186,13 @@ export async function uploadAgentEvidenceImage({
 }) {
   return runWorkload('external', 'agent-evidence:drive-upload', async () => {
     const rootId = requireConfiguration();
-    const campaignName = safeSegment(
-      `${campaign?.name || 'Campanha'} - ${campaign?.id || driver?.campaignId || ''}`,
-      'Campanha',
-    );
+    const hasCampaign = Boolean(campaign?.id || driver?.campaignId);
+    const campaignName = hasCampaign
+      ? safeSegment(
+          `${campaign?.name || 'Campanha'} - ${campaign?.id || driver?.campaignId || ''}`,
+          'Campanha',
+        )
+      : 'Motoristas sem campanha';
     const driverName = safeSegment(
       `${driver?.name || 'Motorista'} - ${driver?.id || driver?._id || ''}`,
       'Motorista',
@@ -222,6 +225,7 @@ export async function uploadAgentEvidenceImage({
         messageId: String(messageId).slice(0, 120),
         campaignId: String(campaign?.id || driver?.campaignId || '').slice(0, 120),
         driverId: String(driver?.id || driver?._id || '').slice(0, 120),
+        evidenceContext: hasCampaign ? 'campaign' : 'driver_validation',
       },
     };
     const uploaded = await uploadMultipart({ metadata, buffer, fileName, mimeType });

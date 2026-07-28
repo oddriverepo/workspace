@@ -18,8 +18,8 @@ const PROCESSING_STALE_MS = 5 * 60 * 1000;
 const SUCCESS_REPLY = 'Recebi essa foto. Pode enviar a próxima.';
 const DUPLICATE_REPLY = 'Essa foto já foi recebida. Pode enviar a próxima, se faltar alguma.';
 const PROCESSING_REPLY = 'Essa foto já está sendo processada. Pode enviar a próxima, se faltar alguma.';
-const NOT_LINKED_REPLY =
-  'Não localizei um cadastro ativo em campanha para este telefone. A imagem não foi registrada.';
+const NOT_REGISTERED_REPLY =
+  'Não localizei um cadastro ativo para este telefone. A imagem não foi registrada.';
 
 function deterministicEvidenceId(messageId) {
   const digest = crypto.createHash('sha256').update(`gptmaker:${messageId}`).digest('hex').slice(0, 28);
@@ -56,7 +56,7 @@ async function claimMessage({ messageId, phone, driver, evidenceType, receivedAt
     source_message_id: messageId,
     chat_id: chatId || null,
     phone,
-    campaign_id: driver.campaignId,
+    campaign_id: driver.campaignId || null,
     driver_id: driver.id,
     driver_campaign_id: driver.driverCampaignId || null,
     step: evidenceType,
@@ -193,6 +193,10 @@ export async function ensureAgentEvidenceIndexes() {
       { name: 'campaign_driver_evidence' },
     ),
     database.collection(COLLECTION).createIndex(
+      { driver_id: 1, status: 1, created_at: -1 },
+      { name: 'driver_evidence' },
+    ),
+    database.collection(COLLECTION).createIndex(
       { source_provider: 1, drive_file_id: 1, status: 1 },
       {
         name: 'received_gptmaker_drive_file',
@@ -227,22 +231,24 @@ export async function registerAgentEvidence(input = {}) {
 
   const rawDriver = await readDriverByExactPhone(phone);
   const driver = publicDriver(rawDriver);
-  if (!driver.id || !driver.campaignId) {
-    return { success: false, ignored: true, safe_reply: NOT_LINKED_REPLY };
-  }
-  if (await isCampaignDriverDetached(driver.campaignId, driver.id, driver.driverCampaignId)) {
-    return { success: false, ignored: true, safe_reply: NOT_LINKED_REPLY };
+  if (!driver.id) {
+    return { success: false, ignored: true, safe_reply: NOT_REGISTERED_REPLY };
   }
 
-  const campaign = await readCampaignById(driver.campaignId);
-  if (!campaign) {
-    return { success: false, ignored: true, safe_reply: NOT_LINKED_REPLY };
+  let campaign = null;
+  let evidenceDriver = driver;
+  if (driver.campaignId) {
+    const detached = await isCampaignDriverDetached(driver.campaignId, driver.id, driver.driverCampaignId);
+    campaign = detached ? null : await readCampaignById(driver.campaignId);
+    if (!campaign) {
+      evidenceDriver = { ...driver, campaignId: '', driverCampaignId: '' };
+    }
   }
 
   const claim = await claimMessage({
     messageId,
     phone,
-    driver,
+    driver: evidenceDriver,
     evidenceType,
     receivedAt,
     chatId,
@@ -279,11 +285,13 @@ export async function registerAgentEvidence(input = {}) {
       );
       drive = await uploadAgentEvidenceImage({
         ...image,
-        campaign: {
-          id: String(campaign.id || campaign._id || driver.campaignId),
-          name: campaign.name || campaign.title || 'Campanha',
-        },
-        driver,
+        campaign: campaign
+          ? {
+              id: String(campaign.id || campaign._id || evidenceDriver.campaignId),
+              name: campaign.name || campaign.title || 'Campanha',
+            }
+          : null,
+        driver: evidenceDriver,
         messageId,
         receivedAt,
       });
