@@ -12,13 +12,28 @@ export function configureAgentEvidenceDrive({ googleAuthService: service }) {
   googleAuthService = service;
 }
 
+function parseDriveFolderId(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  try {
+    const url = new URL(raw);
+    const folderMatch = url.pathname.match(/\/folders\/([a-zA-Z0-9_-]{10,200})/);
+    if (folderMatch?.[1]) return folderMatch[1];
+    const id = url.searchParams.get('id');
+    if (/^[a-zA-Z0-9_-]{10,200}$/.test(String(id || ''))) return id;
+  } catch {
+    // Not a URL; validate as a raw Drive folder ID below.
+  }
+  return /^[a-zA-Z0-9_-]{10,200}$/.test(raw) ? raw : '';
+}
+
 function rootFolderId() {
-  return String(
+  return parseDriveFolderId(
     process.env.GOOGLE_DRIVE_EVIDENCE_FOLDER_ID ||
     process.env.GOOGLE_DRIVE_EVIDENCES_FOLDER_ID ||
     process.env.EVIDENCE_DRIVE_ROOT_FOLDER_ID ||
     '',
-  ).trim();
+  );
 }
 
 function requireConfiguration() {
@@ -126,6 +141,8 @@ async function ensureFolder(parentId, name) {
         supportsAllDrives: true,
         includeItemsFromAllDrives: true,
       },
+    }).catch(error => {
+      throw logDriveFailure(error, 'find_folder');
     });
     let folderId = found.data?.files?.[0]?.id;
     if (!folderId) {
@@ -139,6 +156,8 @@ async function ensureFolder(parentId, name) {
           mimeType: 'application/vnd.google-apps.folder',
           parents: [parentId],
         },
+      }).catch(error => {
+        throw logDriveFailure(error, 'create_folder');
       });
       folderId = created.data?.id;
     }
