@@ -2380,14 +2380,14 @@ footer::before {
   border-bottom: 1px solid #e4e4e7;
   white-space: nowrap;
 }
-.overview-targets-table thead th.num { text-align: right; }
+.overview-targets-table thead th.num { text-align: center; }
 .overview-targets-table tbody tr:hover { background: #f4f4f5; }
 .overview-targets-table tbody td {
   padding: 6px 8px;
   border-bottom: 1px solid #f4f4f5;
   white-space: nowrap;
 }
-.overview-targets-table tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.overview-targets-table tbody td.num { text-align: center; font-variant-numeric: tabular-nums; }
 .overview-targets-table td.targets-name {
   max-width: 160px;
   overflow: hidden;
@@ -2409,7 +2409,7 @@ footer::before {
   white-space: nowrap;
 }
 .overview-targets-table tfoot .targets-total-label { color: #3f3f46; }
-.overview-targets-table tfoot .targets-total { text-align: right; font-variant-numeric: tabular-nums; color: #18181b; }
+.overview-targets-table tfoot .targets-total { text-align: center; font-variant-numeric: tabular-nums; color: #18181b; }
 .overview-targets-empty {
   font-size: 13px;
   color: #71717a;
