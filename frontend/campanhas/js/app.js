@@ -561,21 +561,12 @@ function renderListView(filtered = []) {
       ? `<div class="campaigns-list-pct"><div class="campaigns-list-pct-bar"><div class="campaigns-list-pct-fill" style="width:${summary.installedPct}%"></div></div><span>${summary.installedPct}%</span></div>`
       : '<span class="muted">—</span>';
     const href = `campaign.html?id=${encodeURIComponent(campaign.id)}`;
-    const targetVal = Number(campaign.driverTarget ?? 0);
-    const targetDisplay = targetVal > 0 ? String(targetVal) : '';
     return `
       <tr class="campaigns-list-row" data-href="${escapeHTML(href)}" tabindex="0" data-campaign-id="${escapeHTML(campaign.id)}">
         <td class="campaigns-list-name">${escapeHTML(campaign.name)}</td>
         <td>${locationText}</td>
         <td>${period}</td>
         <td>${pct}</td>
-        <td class="campaigns-list-meta-cell" data-meta-cell>
-          <input type="number" class="campaigns-list-meta-input" min="0" max="100000"
-            value="${escapeHTML(targetDisplay)}" placeholder="—"
-            title="Meta de motoristas"
-            data-campaign-id="${escapeHTML(campaign.id)}"
-            data-original="${escapeHTML(targetDisplay)}" />
-        </td>
         <td><span class="pill ${statusClass}">${formatStatus(campaign.status)}</span></td>
       </tr>
     `;
@@ -589,7 +580,6 @@ function renderListView(filtered = []) {
           <th>Cidade</th>
           <th>Período</th>
           <th>Instalação</th>
-          <th>Meta</th>
           <th>Status</th>
         </tr>
       </thead>
@@ -600,55 +590,10 @@ function renderListView(filtered = []) {
   wrapper.querySelectorAll('.campaigns-list-row').forEach(row => {
     const href = row.dataset.href;
     row.addEventListener('click', (e) => {
-      if (e.target.closest('[data-meta-cell]')) return;
       window.location.href = href;
     });
     row.addEventListener('keydown', (e) => {
-      if (e.target.closest('[data-meta-cell]')) return;
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); window.location.href = href; }
-    });
-  });
-
-  // Wire meta inputs
-  wrapper.querySelectorAll('.campaigns-list-meta-input').forEach(input => {
-    async function saveMetaInput() {
-      const campaignId = input.dataset.campaignId;
-      const raw = input.value.trim();
-      const target = raw === '' ? 0 : parseInt(raw, 10);
-      if (!Number.isFinite(target) || target < 0 || target > 100000) {
-        input.value = input.dataset.original;
-        return;
-      }
-      input.disabled = true;
-      try {
-        const res = await authFetch(`/api/campaigns/${encodeURIComponent(campaignId)}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ driverTarget: target }),
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        const saved = data?.campaign?.driverTarget ?? target;
-        // Update local cache
-        const cam = campaignsCache.find(c => c.id === campaignId);
-        if (cam) cam.driverTarget = saved;
-        input.value = saved > 0 ? String(saved) : '';
-        input.dataset.original = input.value;
-        input.classList.add('is-saved');
-        setTimeout(() => input.classList.remove('is-saved'), 1200);
-      } catch (err) {
-        console.error('[meta] save error:', err);
-        input.value = input.dataset.original;
-        input.classList.add('is-error');
-        setTimeout(() => input.classList.remove('is-error'), 1500);
-      } finally {
-        input.disabled = false;
-      }
-    }
-    input.addEventListener('blur', saveMetaInput);
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
-      if (e.key === 'Escape') { input.value = input.dataset.original; input.blur(); }
     });
   });
 
@@ -868,7 +813,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
 });
-
 
 
 

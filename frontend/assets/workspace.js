@@ -797,18 +797,16 @@
       // ── Aba 1: Metas de Campanhas ──────────────────────────────
       const targetsItems = Array.isArray(targetsData?.items) ? targetsData.items : [];
       const targetsRows = [
-        ['Campanha', 'Meta', 'Cadastrados', 'Falta Captar', 'Instalados', 'Falta Instalar'],
+        ['Campanha', 'Cadastrados', 'Instalados', 'Falta Instalar'],
         ...targetsItems.map(it => [
           it.campaignName || '',
-          it.meta > 0 ? it.meta : '',
           it.total ?? '',
-          it.faltaCaptar ?? '',
           it.instalados ?? '',
           it.faltaInstalar ?? '',
         ]),
       ];
       const wsTargets = XLSX.utils.aoa_to_sheet(targetsRows);
-      wsTargets['!cols'] = [{ wch: 36 }, { wch: 10 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 16 }];
+      wsTargets['!cols'] = [{ wch: 36 }, { wch: 14 }, { wch: 14 }, { wch: 16 }];
       XLSX.utils.book_append_sheet(wb, wsTargets, 'Metas de Campanhas');
 
       // ── Aba 2: KM Baixa ────────────────────────────────────────
@@ -1156,10 +1154,7 @@
         wrap.innerHTML = '<p class="overview-targets-empty">Nenhuma campanha ativa com dados de motoristas.</p>';
         return;
       }
-      const _totalMeta = items.reduce((s, it) => s + (it.meta > 0 ? it.meta : 0), 0);
       const _totalCad  = items.reduce((s, it) => s + (it.total || 0), 0);
-      const _allFCNull = items.every(it => it.faltaCaptar === null);
-      const _totalFC   = items.reduce((s, it) => s + (it.faltaCaptar !== null ? it.faltaCaptar : 0), 0);
       const _totalInst = items.reduce((s, it) => s + (it.instalados || 0), 0);
       const _totalFI   = items.reduce((s, it) => s + (it.faltaInstalar || 0), 0);
       wrap.innerHTML = `
@@ -1167,9 +1162,7 @@
           <thead>
             <tr>
               <th>Campanha</th>
-              <th class="num">Meta</th>
               <th class="num">Cadastrados</th>
-              <th class="num">Falta Captar</th>
               <th class="num">Instalados</th>
               <th class="num">Falta Instalar</th>
             </tr>
@@ -1177,14 +1170,9 @@
           <tbody>
             ${items.map(it => {
               const faltaInstalarClass = it.faltaInstalar > 10 ? 'targets-urgent' : it.faltaInstalar > 0 ? 'targets-warn' : 'targets-ok';
-              const faltaCaptarText = it.faltaCaptar === null ? '—' : it.faltaCaptar;
-              const faltaCaptarClass = it.faltaCaptar === null ? '' : it.faltaCaptar > 5 ? 'targets-urgent' : it.faltaCaptar > 0 ? 'targets-warn' : 'targets-ok';
-              const metaText = it.meta > 0 ? it.meta : '—';
               return `<tr>
                 <td class="targets-name" title="${escapeHTML(it.campaignName)}">${escapeHTML(it.campaignName)}</td>
-                <td class="num">${metaText}</td>
                 <td class="num">${it.total}</td>
-                <td class="num ${faltaCaptarClass}">${faltaCaptarText}</td>
                 <td class="num">${it.instalados}</td>
                 <td class="num ${faltaInstalarClass}">${it.faltaInstalar}</td>
               </tr>`;
@@ -1193,9 +1181,7 @@
           <tfoot>
             <tr class="targets-total-row">
               <td class="targets-name targets-total-label">Total</td>
-              <td class="num targets-total">${_totalMeta > 0 ? _totalMeta : '—'}</td>
               <td class="num targets-total">${_totalCad}</td>
-              <td class="num targets-total">${_allFCNull ? '—' : _totalFC}</td>
               <td class="num targets-total">${_totalInst}</td>
               <td class="num targets-total">${_totalFI}</td>
             </tr>
