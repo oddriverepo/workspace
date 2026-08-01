@@ -64,6 +64,7 @@
     cachedStates: [],
     cachedCitiesByState: new Map(),
     cachedCitiesAll: [],
+    cityFilterKeyAliases: new Map(),
     historyCache: new Map(),
     renderToken: 0,
     modal: {
@@ -328,8 +329,8 @@
 
     state.filtered = state.allDrivers.filter(function (driver) {
       if (driver._isLead) return false; // garante que leads não vazam no modo normal
-      if (selectedState && canonicalState(getState(driver)) !== selectedState) return false;
-      if (selectedCity && normalizePlace(canonicalCity(getCity(driver))) !== selectedCity) return false;
+      if (selectedState && getDriverFilterState(driver) !== selectedState) return false;
+      if (selectedCity && getCityFilterKey(driver) !== selectedCity) return false;
       if (selectedCampaign === '__none__' && getCurrentCampaignId(driver)) return false;
       if (selectedCampaign === '__none_incomplete__') {
         if (getCurrentCampaignId(driver)) return false;
@@ -493,23 +494,31 @@
     const statesMap = new Map();
     const citiesAllMap = new Map();
     const citiesByState = new Map(); // key = sigla UF → Map<cityKey, cityLabel>
+    const cityEntries = [];
     for (let i = 0; i < state.allDrivers.length; i += 1) {
       const driver = state.allDrivers[i];
       const id = getDriverId(driver);
       if (id) state.driversById.set(id, driver);
-      const uf = canonicalState(getState(driver));   // sempre sigla (ex: "RJ")
-      const city = canonicalCity(getCity(driver));   // sempre nome completo (ex: "Rio de Janeiro")
-      const cityKey = normalizePlace(city);
+      const uf = getDriverFilterState(driver);   // sempre sigla (ex: "RJ")
+      const cityEntry = getCityFilterEntry(driver);
       if (uf) {
         if (!statesMap.has(uf)) statesMap.set(uf, uf);
       }
-      if (city && cityKey) {
-        if (!citiesAllMap.has(cityKey)) citiesAllMap.set(cityKey, city);
-        if (uf) {
-          let bucket = citiesByState.get(uf);
-          if (!bucket) { bucket = new Map(); citiesByState.set(uf, bucket); }
-          if (!bucket.has(cityKey)) bucket.set(cityKey, city);
-        }
+      if (cityEntry.rawKey) {
+        cityEntries.push(cityEntry);
+      }
+    }
+    state.cityFilterKeyAliases = buildCityFilterAliases(cityEntries);
+    for (let i = 0; i < cityEntries.length; i += 1) {
+      const entry = cityEntries[i];
+      const cityKey = resolveCityFilterKey(entry.rawKey, entry.uf);
+      const cityLabel = getPreferredCityLabel(cityKey, entry.label);
+      if (!cityKey) continue;
+      citiesAllMap.set(cityKey, chooseCityFilterLabel(citiesAllMap.get(cityKey), cityLabel));
+      if (entry.uf) {
+        let bucket = citiesByState.get(entry.uf);
+        if (!bucket) { bucket = new Map(); citiesByState.set(entry.uf, bucket); }
+        bucket.set(cityKey, chooseCityFilterLabel(bucket.get(cityKey), cityLabel));
       }
     }
     const sortEntries = function (map) {
@@ -1698,6 +1707,233 @@
     var upper = s.toUpperCase();
     if (BR_UF_TO_CAPITAL[upper]) return BR_UF_TO_CAPITAL[upper]; // sigla UF → capital
     return titleCasePlace(s);
+  }
+
+  var CITY_LABEL_OVERRIDES = {
+    'florianopolis': 'Florian\u00f3polis',
+    'sao paulo': 'S\u00e3o Paulo',
+    'ribeirao preto': 'Ribeir\u00e3o Preto',
+    'sao jose': 'S\u00e3o Jos\u00e9',
+    'sao jose dos campos': 'S\u00e3o Jos\u00e9 dos Campos',
+    'sao jose do rio preto': 'S\u00e3o Jos\u00e9 do Rio Preto',
+    'belem': 'Bel\u00e9m',
+    'maceio': 'Macei\u00f3',
+    'goiania': 'Goi\u00e2nia',
+    'brasilia': 'Bras\u00edlia',
+    'vitoria': 'Vit\u00f3ria',
+    'sao luis': 'S\u00e3o Lu\u00eds',
+  };
+
+  var CITY_KEY_ALIASES = {
+    'florianopomis': 'florianopolis',
+    'florianopolis': 'florianopolis',
+  };
+
+  function getCityFilterEntry(driver) {
+    var uf = getDriverFilterState(driver);
+    var rawKey = getRawCityFilterKey(getCity(driver));
+    return {
+      uf: uf,
+      rawKey: rawKey,
+      label: buildCityFilterLabel(rawKey),
+    };
+  }
+
+  function getCityFilterKey(driver) {
+    var uf = getDriverFilterState(driver);
+    var rawKey = getRawCityFilterKey(getCity(driver));
+    return resolveCityFilterKey(rawKey, uf);
+  }
+
+  function getDriverFilterState(driver) {
+    var uf = canonicalState(getState(driver));
+    return BR_UF_TO_CAPITAL[uf] ? uf : getCitySuffixUf(getCity(driver));
+  }
+
+  function getRawCityFilterKey(raw) {
+    var cleaned = normalizePlace(raw)
+      .replace(/[^a-z0-9\s-]+/g, ' ')
+      .replace(/[-_]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!cleaned) return '';
+    if (cleaned === 'nao informado' || cleaned === 'nao informada') return '';
+
+    var upper = cleaned.toUpperCase();
+    if (BR_UF_TO_CAPITAL[upper]) {
+      return normalizePlace(BR_UF_TO_CAPITAL[upper]);
+    }
+
+    var parts = cleaned.split(' ');
+    if (parts.length > 1) {
+      var first = parts[0].toUpperCase();
+      if (BR_UF_TO_CAPITAL[first]) {
+        parts.shift();
+        cleaned = parts.join(' ').trim();
+      }
+    }
+
+    parts = cleaned.split(' ');
+    if (parts.length > 1) {
+      var last = parts[parts.length - 1].toUpperCase();
+      if (BR_UF_TO_CAPITAL[last]) {
+        parts.pop();
+        cleaned = parts.join(' ').trim();
+      }
+    }
+
+    return CITY_KEY_ALIASES[cleaned] || cleaned;
+  }
+
+  function getCitySuffixUf(raw) {
+    var cleaned = normalizePlace(raw)
+      .replace(/[^a-z0-9\s-]+/g, ' ')
+      .replace(/[-_]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    var parts = cleaned ? cleaned.split(' ') : [];
+    var first = parts.length > 1 ? parts[0].toUpperCase() : '';
+    var last = parts.length > 1 ? parts[parts.length - 1].toUpperCase() : '';
+    if (BR_UF_TO_CAPITAL[first]) return first;
+    return BR_UF_TO_CAPITAL[last] ? last : '';
+  }
+
+  function buildCityFilterLabel(cityKey) {
+    if (!cityKey) return '';
+    return CITY_LABEL_OVERRIDES[cityKey] || titleCasePlace(cityKey);
+  }
+
+  function getPreferredCityLabel(cityKey, fallback) {
+    return CITY_LABEL_OVERRIDES[cityKey] || fallback || titleCasePlace(cityKey);
+  }
+
+  function resolveCityFilterKey(rawKey, uf) {
+    if (!rawKey) return '';
+    var scoped = String(uf || '') + '|' + rawKey;
+    return state.cityFilterKeyAliases.get(scoped)
+      || state.cityFilterKeyAliases.get('|' + rawKey)
+      || CITY_KEY_ALIASES[rawKey]
+      || rawKey;
+  }
+
+  function buildCityFilterAliases(entries) {
+    var aliases = new Map();
+    var buckets = new Map();
+    entries.forEach(function (entry) {
+      var bucketKey = entry.uf || '';
+      var bucket = buckets.get(bucketKey);
+      if (!bucket) {
+        bucket = new Map();
+        buckets.set(bucketKey, bucket);
+      }
+      if (entry.rawKey) {
+        bucket.set(entry.rawKey, (bucket.get(entry.rawKey) || 0) + 1);
+      }
+    });
+
+    buckets.forEach(function (counts, uf) {
+      var keys = Array.from(counts.keys());
+      var parent = new Map(keys.map(function (key) { return [key, key]; }));
+
+      function find(key) {
+        var root = parent.get(key) || key;
+        while (parent.get(root) && parent.get(root) !== root) root = parent.get(root);
+        var current = key;
+        while (parent.get(current) && parent.get(current) !== root) {
+          var next = parent.get(current);
+          parent.set(current, root);
+          current = next;
+        }
+        return root;
+      }
+
+      function union(a, b) {
+        var rootA = find(a);
+        var rootB = find(b);
+        if (rootA !== rootB) parent.set(rootB, rootA);
+      }
+
+      if (uf) {
+        for (var i = 0; i < keys.length; i += 1) {
+          for (var j = i + 1; j < keys.length; j += 1) {
+            if (areProbablySameCity(keys[i], keys[j])) {
+              union(keys[i], keys[j]);
+            }
+          }
+        }
+      }
+
+      var groups = new Map();
+      keys.forEach(function (key) {
+        var root = find(key);
+        if (!groups.has(root)) groups.set(root, []);
+        groups.get(root).push(key);
+      });
+
+      groups.forEach(function (groupKeys) {
+        var preferred = groupKeys.slice().sort(function (a, b) {
+          return cityKeyScore(b, counts.get(b) || 0) - cityKeyScore(a, counts.get(a) || 0)
+            || a.localeCompare(b);
+        })[0];
+        groupKeys.forEach(function (key) {
+          aliases.set(uf + '|' + key, preferred);
+          if (!uf) aliases.set('|' + key, preferred);
+        });
+      });
+    });
+
+    return aliases;
+  }
+
+  function cityKeyScore(key, count) {
+    var score = count * 10;
+    if (CITY_LABEL_OVERRIDES[key]) score += 1000;
+    if (CITY_KEY_ALIASES[key] && CITY_KEY_ALIASES[key] === key) score += 2000;
+    score += Math.min(String(key || '').length, 40);
+    return score;
+  }
+
+  function areProbablySameCity(left, right) {
+    if (!left || !right || left === right) return false;
+    if (left[0] !== right[0]) return false;
+    var minLength = Math.min(left.length, right.length);
+    if (minLength < 7) return false;
+    if (Math.abs(left.length - right.length) > 2) return false;
+    return levenshteinDistanceLimited(left, right, 2) <= 2;
+  }
+
+  function levenshteinDistanceLimited(left, right, limit) {
+    if (Math.abs(left.length - right.length) > limit) return limit + 1;
+    var previous = new Array(right.length + 1);
+    var current = new Array(right.length + 1);
+    for (var j = 0; j <= right.length; j += 1) previous[j] = j;
+
+    for (var i = 1; i <= left.length; i += 1) {
+      current[0] = i;
+      var best = current[0];
+      for (j = 1; j <= right.length; j += 1) {
+        var cost = left[i - 1] === right[j - 1] ? 0 : 1;
+        current[j] = Math.min(
+          previous[j] + 1,
+          current[j - 1] + 1,
+          previous[j - 1] + cost
+        );
+        if (current[j] < best) best = current[j];
+      }
+      if (best > limit) return limit + 1;
+      var tmp = previous;
+      previous = current;
+      current = tmp;
+    }
+
+    return previous[right.length];
+  }
+
+  function chooseCityFilterLabel(current, candidate) {
+    if (!current) return candidate || '';
+    if (!candidate) return current;
+    if (candidate.length < current.length) return candidate;
+    return current;
   }
 
   function normalize(value) {
