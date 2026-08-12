@@ -103,6 +103,55 @@
     return STATUS_NORM[s] || (v ? String(v).trim() : 'Sem status');
   }
 
+  function normalizeToken(v) {
+    return String(v ?? '').trim().toLowerCase()
+      .normalize('NFD').replace(/\p{Diacritic}/gu, '');
+  }
+
+  function normalizeId(value) {
+    if (value == null || value === '') return null;
+    if (typeof value === 'object') {
+      if (value.$oid) return String(value.$oid);
+      if (value.oid) return String(value.oid);
+      if (typeof value.toHexString === 'function') return value.toHexString();
+      if (typeof value.toString === 'function') {
+        const text = value.toString();
+        return text && text !== '[object Object]' ? text : null;
+      }
+      return null;
+    }
+    return String(value);
+  }
+
+  function getDriverCampaignId(d) {
+    return normalizeId(pick(
+      d,
+      'campaignId',
+      'campaign_id',
+      'campaign.id',
+      'campaign._id',
+      'apiData.campaignId',
+      'apiData.campaign_id',
+      'campaignData.campaignId',
+      'campaignData.campaign_id'
+    ));
+  }
+
+  function isCampaignActive(c) {
+    const currentRaw = pick(
+      c,
+      'current_status',
+      'currentStatus',
+      'apiData.current_status',
+      'apiData.currentStatus'
+    );
+    const raw = currentRaw != null ? currentRaw : pick(c, 'status', 'apiData.status');
+    if (raw === true) return true;
+    if (raw === false) return false;
+    const s = normalizeToken(raw);
+    return ['ativa', 'ativo', 'active', 'em andamento', 'andamento'].includes(s);
+  }
+
   function normalizeAdhesion(v) {
     const s = String(v || '').trim().toLowerCase()
       .normalize('NFD').replace(/\p{Diacritic}/gu, '');
@@ -261,10 +310,7 @@
       context: 'overview',
       unit: 'campanhas',
       accent: '#10b981',
-      compute: (items) => items.filter(c => {
-        const s = String(pick(c, 'status', 'apiData.status') || '').toLowerCase();
-        return s === 'ativa' || s === 'ativo' || s === 'active';
-      }).length,
+      compute: (items) => items.filter(isCampaignActive).length,
     },
 
     // ══════════════════════════════════════════════════════════════════════
@@ -350,10 +396,10 @@
       source: 'drivers',
       context: 'overview',
       group_fn: (d, ctx) => {
-        const cid = pick(d, 'campaignId', 'campaign_id', 'campaign.id');
+        const cid = getDriverCampaignId(d);
         if (!cid) return 'Sem campanha';
-        const c = ctx.campaignsById.get(String(cid));
-        return c ? (c.name || c.title || String(cid)) : String(cid);
+        const c = ctx.campaignsById.get(cid);
+        return c ? (c.name || c.title || cid) : cid;
       },
       agg: 'count',
     },
@@ -365,10 +411,10 @@
       source: 'drivers',
       context: 'overview',
       group_fn: (d, ctx) => {
-        const cid = pick(d, 'campaignId', 'campaign_id', 'campaign.id');
+        const cid = getDriverCampaignId(d);
         if (!cid) return 'Sem campanha';
-        const c = ctx.campaignsById.get(String(cid));
-        return c ? (c.name || c.title || String(cid)) : String(cid);
+        const c = ctx.campaignsById.get(cid);
+        return c ? (c.name || c.title || cid) : cid;
       },
       agg: 'sum',
       value: (d) => getDriverKmTravelled(d),
@@ -439,6 +485,40 @@
 
   // ── Cruzamentos válidos por parâmetro ────────────────────────────────────────────
   // Apenas combinações que geram insight real são listadas
+  const CAMPAIGN_RELATED_PARAMS = new Set([
+    'kpi_total_campaigns',
+    'kpi_active_campaigns',
+    'campaigns_by_status',
+    'campaigns_by_client',
+    'campaigns_by_city',
+    'drivers_by_campaign',
+    'km_total_by_campaign',
+  ]);
+
+  function widgetInvolvesCampaign(config) {
+    const a = PARAMS[config?.paramA];
+    const b = PARAMS[config?.paramB];
+    return a?.source === 'campaigns'
+      || b?.source === 'campaigns'
+      || CAMPAIGN_RELATED_PARAMS.has(config?.paramA)
+      || CAMPAIGN_RELATED_PARAMS.has(config?.paramB);
+  }
+
+  function applyCampaignScope(items, def, config, ctx) {
+    if (config?.campaignScope !== 'active' || !widgetInvolvesCampaign(config)) return items;
+    if (def?.source === 'campaigns') return items.filter(isCampaignActive);
+    if (def?.source !== 'drivers') return items;
+    const needsCampaignLink = CAMPAIGN_RELATED_PARAMS.has(config?.paramA)
+      || CAMPAIGN_RELATED_PARAMS.has(config?.paramB);
+    if (!needsCampaignLink) return items;
+    return items.filter(d => {
+      const cid = getDriverCampaignId(d);
+      if (!cid) return false;
+      const campaign = ctx?.campaignsById?.get(cid);
+      return campaign ? isCampaignActive(campaign) : false;
+    });
+  }
+
   const CROSSWITH = {
     campaigns_by_status:        ['campaigns_by_client', 'campaigns_by_city'],
     campaigns_by_client:        ['campaigns_by_status', 'campaigns_by_city'],
@@ -498,8 +578,10 @@
   function buildContext(campaigns, drivers) {
     const campaignsById = new Map();
     (campaigns || []).forEach(c => {
-      const id = c?.id ?? c?._id;
-      if (id != null) campaignsById.set(String(id), c);
+      ['id', '_id', 'apiData.id', 'campaignId', 'campaign_id'].forEach(key => {
+        const id = normalizeId(pick(c, key));
+        if (id != null) campaignsById.set(id, c);
+      });
     });
     return { campaigns: campaigns || [], drivers: drivers || [], campaignsById };
   }
@@ -511,13 +593,13 @@
 
     // ── KPI: retorna objeto com type:'kpi' e value numérico ─────────────────
     if (a.type === 'kpi') {
-      const items = ctx[a.source] || [];
+      const items = applyCampaignScope(ctx[a.source] || [], a, config, ctx);
       const value = a.compute(items);
       return { type: 'kpi', value, unit: a.unit || '', accent: a.accent || '#6366f1' };
     }
 
     // ── Chart: distribuição ─────────────────────────────────────────────────
-    const items = ctx[a.source] || [];
+    const items = applyCampaignScope(ctx[a.source] || [], a, config, ctx);
 
     // Sem cruzamento
     if (!config.paramB) {
@@ -701,6 +783,20 @@
   }
 
   // ── Modal de criação/edição ──────────────────────────────────────────────
+  function updateCampaignScopeMode() {
+    if (!_modalRoot) return;
+    const form = _modalRoot.querySelector('#cwModalForm');
+    const field = form?.querySelector('#cwCampaignScopeField');
+    const sel = form?.querySelector('#cwCampaignScope');
+    const config = {
+      paramA: form?.querySelector('#cwParamA')?.value,
+      paramB: form?.querySelector('#cwParamB')?.value || null,
+    };
+    const shouldShow = _activeModalState?.context === 'overview' && widgetInvolvesCampaign(config);
+    if (field) field.style.display = shouldShow ? '' : 'none';
+    if (!shouldShow && sel) sel.value = 'all';
+  }
+
   let _modalRoot = null;
   function ensureModal() {
     if (_modalRoot) return _modalRoot;
@@ -729,6 +825,14 @@
               <label for="cwParamB">Cruzar com <span class="cw-muted">(opcional)</span></label>
               <select id="cwParamB" name="paramB"></select>
             </div>
+          </div>
+
+          <div class="cw-field" id="cwCampaignScopeField" style="display:none">
+            <label for="cwCampaignScope">Filtro de campanhas</label>
+            <select id="cwCampaignScope" name="campaignScope">
+              <option value="all">Todas as campanhas</option>
+              <option value="active">Somente campanhas ativas</option>
+            </select>
           </div>
 
           <div class="cw-field">
@@ -801,6 +905,7 @@
     // Popular selects filtrados pelo contexto
     const selA = form.querySelector('#cwParamA');
     const selB = form.querySelector('#cwParamB');
+    const campaignScope = form.querySelector('#cwCampaignScope');
     populateParamSelect(selA, context, false, false);
 
     // Pre-fill paramA primeiro para poder filtrar as opções válidas de cruzamento
@@ -812,9 +917,11 @@
     // Popula B com filtro de cruzamentos válidos baseado no A já selecionado
     populateParamSelect(selB, context, true, true, selA.value);
     selB.value = editing?.paramB || '';
+    if (campaignScope) campaignScope.value = editing?.campaignScope || 'all';
 
     // Modo inicial (KPI vs chart)
     updateModalMode(selA.value);
+    updateCampaignScopeMode();
 
     // Quando muda o indicador A: re-filtra opções de B, atualiza modo e preview
     selA.onchange = () => {
@@ -822,6 +929,12 @@
       const prevB = selB.value;
       populateParamSelect(selB, context, true, true, selA.value);
       selB.value = prevB; // tenta manter seleção anterior se ainda válida
+      updateCampaignScopeMode();
+      updatePreview();
+    };
+
+    selB.onchange = () => {
+      updateCampaignScopeMode();
       updatePreview();
     };
 
@@ -842,6 +955,7 @@
         paramA: selA.value,
         paramB: selB.value || null,
         chartType: form.querySelector('input[name="chartType"]:checked')?.value || 'bar',
+        campaignScope: campaignScope?.value || 'all',
         context,
       };
       if (!payload.title) { form.title.focus(); return; }
@@ -885,6 +999,7 @@
       paramA: selA.value,
       paramB: form.querySelector('#cwParamB').value || null,
       chartType: form.querySelector('input[name="chartType"]:checked')?.value || 'bar',
+      campaignScope: form.querySelector('#cwCampaignScope')?.value || 'all',
     };
     const data = computeWidgetData(config, _activeModalState.ctx);
     const cardBody = _modalRoot.querySelector('.cw-preview-body');

@@ -19,6 +19,7 @@ const router = express.Router();
 
 const VALID_CONTEXTS  = new Set(['overview', 'campaigns']);
 const VALID_CHART_TYPES = new Set(['bar', 'line', 'pie', 'doughnut']);
+const VALID_CAMPAIGN_SCOPES = new Set(['all', 'active']);
 const VALID_PARAMS = new Set([
   // KPIs — Motoristas
   'kpi_total_drivers',
@@ -79,14 +80,16 @@ function validatePayload(body) {
   const paramA = String(body?.paramA || '').trim();
   const paramB = body?.paramB ? String(body.paramB).trim() : null;
   const chartType = String(body?.chartType || 'bar').trim();
+  const campaignScope = String(body?.campaignScope || 'all').trim();
 
   if (!title) return { error: 'Título obrigatório.' };
   if (!VALID_CONTEXTS.has(context)) return { error: 'Contexto inválido.' };
   if (!VALID_PARAMS.has(paramA)) return { error: 'Parâmetro principal inválido.' };
   if (paramB && !VALID_PARAMS.has(paramB)) return { error: 'Parâmetro de cruzamento inválido.' };
   if (!VALID_CHART_TYPES.has(chartType)) return { error: 'Tipo de gráfico inválido.' };
+  if (!VALID_CAMPAIGN_SCOPES.has(campaignScope)) return { error: 'Filtro de campanhas inválido.' };
 
-  return { value: { title, context, paramA, paramB, chartType } };
+  return { value: { title, context, paramA, paramB, chartType, campaignScope } };
 }
 
 function serialize(doc) {
@@ -99,6 +102,7 @@ function serialize(doc) {
     paramA: doc.paramA,
     paramB: doc.paramB || null,
     chartType: doc.chartType,
+    campaignScope: VALID_CAMPAIGN_SCOPES.has(doc.campaignScope) ? doc.campaignScope : 'all',
     position: typeof doc.position === 'number' ? doc.position : 0,
     w: typeof doc.w === 'number' && doc.w >= 1 ? doc.w : 1,
     h: typeof doc.h === 'number' && doc.h >= 1 ? doc.h : 1,
