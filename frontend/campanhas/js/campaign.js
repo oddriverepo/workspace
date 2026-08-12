@@ -64,6 +64,7 @@ const btnAddDriver = document.getElementById('btnAddDriver');
 const btnSaveDrivers = document.getElementById('btnSaveDrivers');
 const btnImportDrivers = document.getElementById('btnImportDrivers');
 const btnExportDrivers = document.getElementById('btnExportDrivers');
+const btnReport = document.getElementById('btnReport');
 const importDriversFile = document.getElementById('importDriversFile');
 const btnImportKm = document.getElementById("btnImportKm");
 const btnSaveKm = document.getElementById('btnSaveKm');
@@ -98,6 +99,9 @@ const driverForm = document.getElementById('driverForm');
 const driverFormFields = document.getElementById('driverFormFields');
 const driverFormSubmit = document.getElementById('driverFormSubmit');
 const driverFormHint = document.getElementById('driverFormHint');
+const partialReportModal = document.getElementById('partialReportModal');
+const btnPartialReportDesktop = document.getElementById('btnPartialReportDesktop');
+const btnPartialReportMobile = document.getElementById('btnPartialReportMobile');
 const graphicFormModal = document.getElementById('graphicFormModal');
 const graphicForm = document.getElementById('graphicForm');
 const graphicFormMessage = document.getElementById('graphicFormMessage');
@@ -5094,6 +5098,435 @@ function calculateMetrics(drivers = []) {
   };
 }
 
+function openPartialReportModal() {
+  if (!currentCampaign) {
+    alert('Carregue uma campanha antes de gerar o relatório parcial.');
+    return;
+  }
+  showModal(partialReportModal);
+}
+
+function partialReportText(...values) {
+  for (const value of values) {
+    const text = String(value ?? '').trim();
+    if (text) return text;
+  }
+  return '';
+}
+
+function partialReportNumber(value) {
+  const parsed = parseNumeric(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function partialReportField(driver, aliases = [], directKeys = []) {
+  for (const key of directKeys) {
+    const value = key.split('.').reduce((acc, part) => acc?.[part], driver);
+    const text = partialReportText(value);
+    if (text) return text;
+  }
+  return getDriverRawValueByAliases(driver, aliases);
+}
+
+function partialReportStatusLabel(driver) {
+  const normalized = normalizeDriverStatus(driver?.status || driver?.statusRaw || driver?.raw?.Status || '');
+  const labels = {
+    agendado: 'Agendado',
+    confirmado: 'Confirmado',
+    instalado: 'Instalado',
+    aguardando: 'Aguardando',
+    cadastrando: 'Cadastrando',
+    problema: 'Problema',
+    revisar: 'Revisar',
+  };
+  return labels[normalized] || (normalized ? normalized.charAt(0).toUpperCase() + normalized.slice(1) : '-');
+}
+
+function partialReportDriverRows(drivers = []) {
+  return drivers.map(driver => {
+    const kmCtx = getDriverKmContext(driver);
+    const odometer = getDriverOdometerDistance(driver);
+    const driverOdometer = Number.isFinite(odometer.driverOdometer) ? `${formatNumber(odometer.driverOdometer)} km` : '-';
+    const graphicOdometer = Number.isFinite(odometer.graphicOdometer) ? `${formatNumber(odometer.graphicOdometer)} km` : '-';
+    const odometerKm = Number.isFinite(odometer.value) ? `${formatNumber(odometer.value)} km` : (odometer.inconsistent ? 'Inconsistente' : '-');
+    return {
+      id: String(driver?.id || ''),
+      name: partialReportText(driver?.name, partialReportField(driver, ['nome'], []), 'Motorista sem nome'),
+      city: partialReportText(driver?.city, driver?.address?.city, partialReportField(driver, ['cidade'], []), '-'),
+      phone: partialReportText(driver?.phone, driver?.phoneDigits, partialReportField(driver, ['numero', 'número', 'telefone'], []), '-'),
+      plate: partialReportText(driver?.plate, partialReportField(driver, ['placa'], []), '-'),
+      model: partialReportText(driver?.model, partialReportField(driver, ['modelo'], []), '-'),
+      status: partialReportStatusLabel(driver),
+      km: Number.isFinite(kmCtx.travelledKm) ? `${formatNumber(Math.round(kmCtx.travelledKm))} km` : '-',
+      driverOdometer,
+      graphicOdometer,
+      odometerKm,
+    };
+  });
+}
+
+function partialReportBuildData(campaign = {}) {
+  const drivers = Array.isArray(campaign.drivers) ? campaign.drivers : [];
+  const metrics = calculateMetrics(drivers);
+  const api = campaign.apiData || {};
+  const installed = drivers.filter(driver => normalizeDriverStatus(driver?.status || driver?.statusRaw || driver?.raw?.Status || '') === 'instalado').length;
+  const scheduled = drivers.filter(driver => normalizeDriverStatus(driver?.status || driver?.statusRaw || driver?.raw?.Status || '') === 'agendado').length;
+  const review = drivers.filter(driver => {
+    const status = normalizeDriverStatus(driver?.status || driver?.statusRaw || driver?.raw?.Status || '');
+    return status === 'problema' || status === 'revisar';
+  }).length;
+  const goal = getCampaignKmGoal(campaign, drivers.length);
+  const progress = goal.total > 0 ? Math.min(100, Math.round((metrics.totalKm / goal.total) * 100)) : null;
+  const missingKm = goal.total > 0 ? Math.max(0, Math.round(goal.total - metrics.totalKm)) : null;
+  const evidenceCount = drivers.filter(driver => {
+    const driverFlow = driver?.driverFlow || driver?.evidenceStatus?.driver || driver?.driverEvidenceStatus;
+    const graphicFlow = driver?.graphicFlow || driver?.evidenceStatus?.graphic || driver?.graphicEvidenceStatus;
+    return Boolean(driverFlow?.hasUploads || driverFlow?.completed || graphicFlow?.hasUploads || graphicFlow?.completed);
+  }).length;
+
+  return {
+    campaignName: partialReportText(campaign.name, campaign.title, 'Campanha'),
+    period: partialReportText(campaign.period, '-'),
+    location: [api.city || campaign.city, api.state || campaign.state].filter(Boolean).join(' / ') || '-',
+    description: partialReportText(api.description, campaign.description, '-'),
+    monthlyValue: partialReportNumber(api.monthlyValue || campaign.monthlyValue),
+    metaKms: partialReportNumber(api.metaKms || campaign.metaKms),
+    status: formatStatusPill(campaign.currentStatus || campaign.status || '').label,
+    generatedAt: new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }),
+    totalDrivers: drivers.length,
+    installed,
+    scheduled,
+    review,
+    evidenceCount,
+    totalKm: Math.round(metrics.totalKm || 0),
+    averageAdherence: metrics.averageAdherence,
+    goal,
+    progress,
+    missingKm,
+    rows: partialReportDriverRows(drivers),
+  };
+}
+
+function partialReportAssetUrl(path) {
+  try {
+    return new URL(path, window.location.href).href;
+  } catch (_) {
+    return path;
+  }
+}
+
+function partialReportCss(mode) {
+  const isMobile = mode === 'mobile';
+  return `
+    @page { size: ${isMobile ? '420px 1188px' : 'A4 landscape'}; margin: ${isMobile ? '12px' : '10mm'}; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #eaf0f8;
+      color: #111827;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.42;
+    }
+    .print-toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 10px 16px;
+      background: rgba(255,255,255,.92);
+      border-bottom: 1px solid #dbe4ee;
+      backdrop-filter: blur(8px);
+    }
+    .print-toolbar button {
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      background: #fff;
+      color: #111827;
+      padding: 9px 13px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .report-shell {
+      width: ${isMobile ? '390px' : 'min(1120px, calc(100% - 32px))'};
+      margin: ${isMobile ? '12px auto' : '18px auto'};
+      overflow: hidden;
+      border: 1px solid #dbe4ee;
+      border-radius: ${isMobile ? '18px' : '20px'};
+      background: #fff;
+      box-shadow: 0 18px 50px rgba(15, 23, 42, 0.10);
+    }
+    .hero {
+      display: grid;
+      grid-template-columns: ${isMobile ? '1fr' : '1fr auto'};
+      gap: 16px;
+      padding: ${isMobile ? '22px 20px' : '26px 30px'};
+      background: linear-gradient(135deg, #07111f 0%, #123b78 56%, #0b8f7f 100%);
+      color: #fff;
+    }
+    .brand { display: flex; align-items: center; gap: 14px; min-width: 0; }
+    .brand img { width: 48px; height: 48px; object-fit: contain; border-radius: 12px; background: #fff; padding: 6px; }
+    .eyebrow { margin: 0 0 4px; font-size: 11px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; opacity: .78; }
+    h1 { margin: 0; font-size: ${isMobile ? '22px' : '30px'}; line-height: 1.15; }
+    .hero-meta { display: flex; flex-direction: column; justify-content: center; gap: 4px; text-align: ${isMobile ? 'left' : 'right'}; color: #dbeafe; font-size: 13px; }
+    .section { padding: ${isMobile ? '18px 20px' : '22px 30px'}; border-bottom: 1px solid #e2e8f0; }
+    .section:last-child { border-bottom: 0; }
+    .kpis { display: grid; grid-template-columns: ${isMobile ? 'repeat(2, minmax(0, 1fr))' : 'repeat(6, minmax(0, 1fr))'}; border: 1px solid #dbe4ee; border-radius: 16px; overflow: hidden; }
+    .kpi { min-height: 92px; padding: 14px; border-right: 1px solid #e2e8f0; border-bottom: ${isMobile ? '1px solid #e2e8f0' : '0'}; background: #f8fafc; }
+    .kpi:nth-child(${isMobile ? '2n' : '6n'}) { border-right: 0; }
+    .kpi small { display: block; color: #64748b; font-size: 10px; font-weight: 900; letter-spacing: .07em; text-transform: uppercase; }
+    .kpi strong { display: block; margin-top: 8px; font-size: ${isMobile ? '22px' : '26px'}; line-height: 1; color: #0f172a; }
+    .kpi .blue { color: #1267d8; }
+    .kpi .green { color: #079669; }
+    .kpi .amber { color: #b77905; }
+    .kpi span { display: block; margin-top: 6px; color: #64748b; font-size: 12px; }
+    .summary-grid { display: grid; grid-template-columns: ${isMobile ? '1fr' : '1fr 1.35fr'}; gap: 16px; align-items: stretch; }
+    .panel { border: 1px solid #dbe4ee; border-radius: 16px; padding: 16px; background: #fff; }
+    h2 { margin: 0 0 12px; font-size: ${isMobile ? '17px' : '20px'}; }
+    .facts { display: grid; gap: 9px; color: #334155; font-size: 13px; }
+    .facts b { color: #111827; }
+    .km-progress { margin-top: 10px; height: 10px; overflow: hidden; border-radius: 999px; background: #e2e8f0; }
+    .km-progress span { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #f59e0b, #10b981); }
+    .muted { color: #64748b; }
+    .driver-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .driver-table th {
+      padding: 10px 8px;
+      background: #f1f5f9;
+      color: #64748b;
+      font-size: 10px;
+      letter-spacing: .07em;
+      text-transform: uppercase;
+      text-align: left;
+      border-bottom: 1px solid #dbe4ee;
+    }
+    .driver-table td { padding: 10px 8px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+    .driver-table tr:last-child td { border-bottom: 0; }
+    .driver-name { font-weight: 800; color: #0f172a; }
+    .status-pill { display: inline-flex; border-radius: 999px; background: #eef6ff; color: #1267d8; padding: 4px 8px; font-size: 11px; font-weight: 800; }
+    .mobile-list { display: grid; gap: 10px; }
+    .driver-card { border: 1px solid #dbe4ee; border-radius: 14px; padding: 13px; background: #f8fafc; }
+    .driver-card-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+    .driver-card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; margin-top: 12px; font-size: 12px; }
+    .driver-card-grid small { display: block; color: #64748b; font-size: 10px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; }
+    .driver-card-grid span { display: block; margin-top: 2px; color: #111827; font-weight: 700; word-break: break-word; }
+    .footer-note { color: #64748b; font-size: 11px; text-align: center; padding: 14px 20px 18px; }
+    @media print {
+      body { background: #fff; }
+      .print-toolbar { display: none; }
+      .report-shell { width: 100%; margin: 0; border-radius: 0; box-shadow: none; }
+      .section { break-inside: avoid; }
+      .driver-table tr, .driver-card { break-inside: avoid; }
+    }
+  `;
+}
+
+function buildPartialReportDesktopHtml(data) {
+  const progressWidth = Number.isFinite(data.progress) ? `${data.progress}%` : '0%';
+  const rows = data.rows.map(row => `
+    <tr>
+      <td><span class="driver-name">${escapeHTML(row.name)}</span><br><span class="muted">${escapeHTML(row.phone)}</span></td>
+      <td>${escapeHTML(row.city)}</td>
+      <td><span class="status-pill">${escapeHTML(row.status)}</span></td>
+      <td>${escapeHTML(row.km)}</td>
+      <td>${escapeHTML(row.driverOdometer)}</td>
+      <td>${escapeHTML(row.graphicOdometer)}</td>
+      <td>${escapeHTML(row.odometerKm)}</td>
+    </tr>
+  `).join('');
+
+  return `
+    <section class="section">
+      <div class="kpis">
+        <div class="kpi"><small>Motoristas</small><strong class="blue">${formatNumber(data.totalDrivers)}</strong><span>Total na campanha</span></div>
+        <div class="kpi"><small>Instalados</small><strong class="green">${formatNumber(data.installed)}</strong><span>Veículos adesivados</span></div>
+        <div class="kpi"><small>Agendados</small><strong>${formatNumber(data.scheduled)}</strong><span>Na fila de adesivagem</span></div>
+        <div class="kpi"><small>KM rodado</small><strong class="blue">${formatNumber(data.totalKm)}</strong><span>Base API OD Drive</span></div>
+        <div class="kpi"><small>Progresso</small><strong class="amber">${data.progress == null ? '-' : `${data.progress}%`}</strong><span>Meta estimada</span></div>
+        <div class="kpi"><small>Evidências</small><strong>${formatNumber(data.evidenceCount)}</strong><span>Com envio registrado</span></div>
+      </div>
+    </section>
+    <section class="section">
+      <div class="summary-grid">
+        <div class="panel">
+          <h2>Status da campanha</h2>
+          <div class="facts">
+            <div><b>Período:</b> ${escapeHTML(data.period)}</div>
+            <div><b>Local:</b> ${escapeHTML(data.location)}</div>
+            <div><b>Modelo:</b> ${escapeHTML(data.description)}</div>
+            <div><b>Status:</b> ${escapeHTML(data.status || '-')}</div>
+            <div><b>Valor mensal:</b> ${data.monthlyValue > 0 ? `R$ ${formatNumber(data.monthlyValue)}` : '-'}</div>
+          </div>
+        </div>
+        <div class="panel">
+          <h2>Visão de KM</h2>
+          <div class="facts">
+            <div><b>${data.progress == null ? '-' : `${data.progress}% da meta`}</b></div>
+            <div class="km-progress"><span style="width:${progressWidth}"></span></div>
+            <div>KM rodado: <b>${formatNumber(data.totalKm)} km</b></div>
+            <div>Meta estimada: <b>${data.goal?.total ? `${formatNumber(data.goal.total)} km` : '-'}</b></div>
+            <div>Faltam: <b>${data.missingKm == null ? '-' : `${formatNumber(data.missingKm)} km`}</b></div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="section">
+      <h2>Motoristas da campanha</h2>
+      <table class="driver-table">
+        <thead>
+          <tr>
+            <th>Motorista</th>
+            <th>Cidade</th>
+            <th>Status</th>
+            <th>KM</th>
+            <th>Odômetro motorista</th>
+            <th>Odômetro gráfica</th>
+            <th>KM por odômetros</th>
+          </tr>
+        </thead>
+        <tbody>${rows || '<tr><td colspan="7">Nenhum motorista encontrado.</td></tr>'}</tbody>
+      </table>
+    </section>
+  `;
+}
+
+function buildPartialReportMobileHtml(data) {
+  const progressWidth = Number.isFinite(data.progress) ? `${data.progress}%` : '0%';
+  const rows = data.rows.map(row => `
+    <article class="driver-card">
+      <div class="driver-card-head">
+        <div>
+          <div class="driver-name">${escapeHTML(row.name)}</div>
+          <div class="muted">${escapeHTML(row.city)}</div>
+        </div>
+        <span class="status-pill">${escapeHTML(row.status)}</span>
+      </div>
+      <div class="driver-card-grid">
+        <div><small>Telefone</small><span>${escapeHTML(row.phone)}</span></div>
+        <div><small>Placa</small><span>${escapeHTML(row.plate)}</span></div>
+        <div><small>KM rodado</small><span>${escapeHTML(row.km)}</span></div>
+        <div><small>KM por odômetros</small><span>${escapeHTML(row.odometerKm)}</span></div>
+      </div>
+    </article>
+  `).join('');
+
+  return `
+    <section class="section">
+      <div class="kpis">
+        <div class="kpi"><small>Motoristas</small><strong class="blue">${formatNumber(data.totalDrivers)}</strong><span>Total</span></div>
+        <div class="kpi"><small>Instalados</small><strong class="green">${formatNumber(data.installed)}</strong><span>Concluídos</span></div>
+        <div class="kpi"><small>KM rodado</small><strong class="blue">${formatNumber(data.totalKm)}</strong><span>API OD Drive</span></div>
+        <div class="kpi"><small>Progresso</small><strong class="amber">${data.progress == null ? '-' : `${data.progress}%`}</strong><span>Meta estimada</span></div>
+      </div>
+    </section>
+    <section class="section">
+      <div class="panel">
+        <h2>Resumo</h2>
+        <div class="facts">
+          <div><b>Período:</b> ${escapeHTML(data.period)}</div>
+          <div><b>Local:</b> ${escapeHTML(data.location)}</div>
+          <div><b>Modelo:</b> ${escapeHTML(data.description)}</div>
+          <div><b>Agendados:</b> ${formatNumber(data.scheduled)}</div>
+          <div><b>Evidências recebidas:</b> ${formatNumber(data.evidenceCount)}</div>
+        </div>
+      </div>
+    </section>
+    <section class="section">
+      <div class="panel">
+        <h2>Visão de KM</h2>
+        <div class="facts">
+          <div><b>${data.progress == null ? '-' : `${data.progress}% da meta`}</b></div>
+          <div class="km-progress"><span style="width:${progressWidth}"></span></div>
+          <div>KM rodado: <b>${formatNumber(data.totalKm)} km</b></div>
+          <div>Faltam: <b>${data.missingKm == null ? '-' : `${formatNumber(data.missingKm)} km`}</b></div>
+        </div>
+      </div>
+    </section>
+    <section class="section">
+      <h2>Motoristas</h2>
+      <div class="mobile-list">${rows || '<div class="driver-card">Nenhum motorista encontrado.</div>'}</div>
+    </section>
+  `;
+}
+
+function buildPartialReportHtml(mode, campaign) {
+  const data = partialReportBuildData(campaign);
+  const logoUrl = partialReportAssetUrl('./assets/images/logo-oddrive.png');
+  const isMobile = mode === 'mobile';
+  const body = isMobile ? buildPartialReportMobileHtml(data) : buildPartialReportDesktopHtml(data);
+  const title = `Relatório parcial - ${data.campaignName}`;
+
+  return `<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${escapeHTML(title)}</title>
+  <style>${partialReportCss(mode)}</style>
+</head>
+<body>
+  <div class="print-toolbar">
+    <button type="button" onclick="window.print()">Salvar como PDF</button>
+    <button type="button" onclick="window.close()">Fechar</button>
+  </div>
+  <main class="report-shell">
+    <header class="hero">
+      <div class="brand">
+        <img src="${escapeHTML(logoUrl)}" alt="OD Drive">
+        <div>
+          <p class="eyebrow">Relatório parcial</p>
+          <h1>${escapeHTML(data.campaignName)}</h1>
+        </div>
+      </div>
+      <div class="hero-meta">
+        <span>${escapeHTML(isMobile ? 'PDF mobile' : 'PDF desktop')}</span>
+        <span>Gerado em ${escapeHTML(data.generatedAt)}</span>
+      </div>
+    </header>
+    ${body}
+    <p class="footer-note">OD Drive - relatório parcial gerado a partir dos dados carregados no Workspace.</p>
+  </main>
+  <script>
+    (function() {
+      function waitForImages() {
+        var images = Array.prototype.slice.call(document.images || []);
+        if (!images.length) return Promise.resolve();
+        return Promise.all(images.map(function(img) {
+          if (img.complete) return Promise.resolve();
+          return new Promise(function(resolve) {
+            img.addEventListener('load', resolve, { once: true });
+            img.addEventListener('error', resolve, { once: true });
+          });
+        }));
+      }
+      window.addEventListener('load', function() {
+        waitForImages().then(function() {
+          setTimeout(function() { window.print(); }, 250);
+        });
+      });
+    })();
+  </script>
+</body>
+</html>`;
+}
+
+function generatePartialReportPdf(mode = 'desktop') {
+  if (!currentCampaign) {
+    alert('Carregue uma campanha antes de gerar o relatório parcial.');
+    return;
+  }
+  const reportWindow = window.open('', '_blank');
+  if (!reportWindow) {
+    alert('O navegador bloqueou a abertura do relatório. Permita pop-ups para gerar o PDF.');
+    return;
+  }
+  const html = buildPartialReportHtml(mode === 'mobile' ? 'mobile' : 'desktop', currentCampaign);
+  reportWindow.document.open();
+  reportWindow.document.write(html);
+  reportWindow.document.close();
+  hideModal(partialReportModal);
+}
+
 function asSummaryDriverItem(driver, minKmPerDriver, campaign) {
   const kmCtx = getDriverKmContext(driver);
   const progressPct = (kmCtx.hasKmData && minKmPerDriver > 0)
@@ -7122,6 +7555,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (btnExportDrivers) {
     btnExportDrivers.addEventListener('click', () => exportDriversFile());
+  }
+
+  if (btnReport) {
+    btnReport.addEventListener('click', openPartialReportModal);
+  }
+
+  if (btnPartialReportDesktop) {
+    btnPartialReportDesktop.addEventListener('click', () => generatePartialReportPdf('desktop'));
+  }
+
+  if (btnPartialReportMobile) {
+    btnPartialReportMobile.addEventListener('click', () => generatePartialReportPdf('mobile'));
   }
 
   if (btnInactivityRefresh) {

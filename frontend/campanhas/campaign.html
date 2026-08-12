@@ -679,6 +679,35 @@
     </div>
   </div>
 
+  <div class="modal hidden" id="partialReportModal" aria-hidden="true">
+    <div class="modal-backdrop" data-modal-dismiss></div>
+    <div class="modal-card modal-card--partial-report" role="dialog" aria-modal="true" aria-labelledby="partialReportTitle">
+      <button class="modal-close" type="button" data-modal-dismiss>&times;</button>
+      <p class="partial-report-eyebrow">Relatório parcial</p>
+      <h2 class="modal-title" id="partialReportTitle">Escolha o formato do PDF</h2>
+      <p class="partial-report-copy">Use o modelo desktop para leitura em tela ampla ou o modelo mobile para envio e leitura rápida pelo WhatsApp.</p>
+      <div class="partial-report-options">
+        <button type="button" class="partial-report-option" id="btnPartialReportDesktop">
+          <span class="partial-report-option-icon">D</span>
+          <span>
+            <strong>PDF desktop</strong>
+            <small>Formato horizontal, ideal para reunião, notebook e tela grande.</small>
+          </span>
+        </button>
+        <button type="button" class="partial-report-option" id="btnPartialReportMobile">
+          <span class="partial-report-option-icon">M</span>
+          <span>
+            <strong>PDF mobile</strong>
+            <small>Formato vertical compacto, ideal para enviar no WhatsApp.</small>
+          </span>
+        </button>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn--ghost" data-modal-dismiss>Cancelar</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal hidden" id="driverBlockModal" aria-hidden="true">
     <div class="modal-backdrop" data-modal-dismiss></div>
     <div class="modal-card modal-card--prompt" style="width:min(440px,92vw)">
