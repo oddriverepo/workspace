@@ -1,5 +1,5 @@
-const KM_PER_DRIVER_PER_30_DAYS = 3000;
-const DEFAULT_CAMPAIGN_DAYS = 30;
+const KM_PER_DRIVER_PER_MONTH = 3000;
+const DEFAULT_CAMPAIGN_MONTHS = 1;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 function parseDate(value) {
@@ -64,25 +64,95 @@ export function getCampaignKmGoalDays(campaign = {}) {
     if (Number.isFinite(days) && days > 0) return days;
   }
 
-  return DEFAULT_CAMPAIGN_DAYS;
+  return null;
+}
+
+function daysInUtcMonth(year, month) {
+  return new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+}
+
+function addUtcMonthsFromAnchor(date, months) {
+  const monthStart = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + months, 1));
+  const year = monthStart.getUTCFullYear();
+  const month = monthStart.getUTCMonth();
+  const day = Math.min(date.getUTCDate(), daysInUtcMonth(year, month));
+  return new Date(Date.UTC(year, month, day));
+}
+
+function isExactMonthAnchor(start, end) {
+  const startDay = utcDayNumber(start);
+  const endDay = utcDayNumber(end);
+  if (endDay <= startDay) return false;
+
+  const roughMonthSpan = Math.max(
+    1,
+    (end.getUTCFullYear() - start.getUTCFullYear()) * 12 + (end.getUTCMonth() - start.getUTCMonth()) + 1,
+  );
+
+  for (let offset = 1; offset <= roughMonthSpan + 1; offset += 1) {
+    const anchorDay = utcDayNumber(addUtcMonthsFromAnchor(start, offset));
+    if (anchorDay === endDay) return true;
+    if (anchorDay > endDay) return false;
+  }
+
+  return false;
+}
+
+function calculateCampaignMonthUnits(start, end) {
+  const startDay = utcDayNumber(start);
+  const endDay = utcDayNumber(end);
+  if (endDay < startDay) return 0;
+
+  const exclusiveEndDay = isExactMonthAnchor(start, end) ? endDay : endDay + 1;
+  let wholeMonths = 0;
+
+  while (utcDayNumber(addUtcMonthsFromAnchor(start, wholeMonths + 1)) <= exclusiveEndDay) {
+    wholeMonths += 1;
+  }
+
+  const cursorDay = utcDayNumber(addUtcMonthsFromAnchor(start, wholeMonths));
+  const nextCursorDay = utcDayNumber(addUtcMonthsFromAnchor(start, wholeMonths + 1));
+  const cycleDays = Math.max(1, nextCursorDay - cursorDay);
+  const remainingDays = Math.max(0, exclusiveEndDay - cursorDay);
+  return wholeMonths + (remainingDays / cycleDays);
+}
+
+export function getCampaignKmGoalPeriod(campaign = {}) {
+  for (const [startValue, endValue] of periodCandidates(campaign)) {
+    const start = parseDate(startValue);
+    const end = parseDate(endValue);
+    if (!start || !end) continue;
+
+    const days = utcDayNumber(end) - utcDayNumber(start) + 1;
+    if (!Number.isFinite(days) || days <= 0) continue;
+
+    const months = calculateCampaignMonthUnits(start, end);
+    if (Number.isFinite(months) && months > 0) {
+      return { days, months, hasPeriod: true };
+    }
+  }
+
+  return { days: null, months: DEFAULT_CAMPAIGN_MONTHS, hasPeriod: false };
 }
 
 export function getCampaignKmGoal(campaign = {}, driverCount = 0) {
-  const days = getCampaignKmGoalDays(campaign);
-  const perDriver = Math.max(0, Math.round((KM_PER_DRIVER_PER_30_DAYS * days) / DEFAULT_CAMPAIGN_DAYS));
+  const period = getCampaignKmGoalPeriod(campaign);
+  const perDriver = Math.max(0, Math.round(KM_PER_DRIVER_PER_MONTH * period.months));
   const drivers = Math.max(0, Math.round(Number(driverCount) || 0));
 
   return {
-    days,
+    days: period.days,
+    months: period.months,
+    hasPeriod: period.hasPeriod,
     perDriver,
     total: perDriver * drivers,
     driverCount: drivers,
-    baseKm: KM_PER_DRIVER_PER_30_DAYS,
-    baseDays: DEFAULT_CAMPAIGN_DAYS,
+    baseKm: KM_PER_DRIVER_PER_MONTH,
+    baseMonths: DEFAULT_CAMPAIGN_MONTHS,
   };
 }
 
 export {
-  KM_PER_DRIVER_PER_30_DAYS,
-  DEFAULT_CAMPAIGN_DAYS,
+  KM_PER_DRIVER_PER_MONTH,
+  DEFAULT_CAMPAIGN_MONTHS,
 };

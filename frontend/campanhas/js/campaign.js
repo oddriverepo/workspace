@@ -302,9 +302,9 @@ const ADHESION_STATUS_OPTIONS = ['agendado', 'concluido', 'faltou', 'reagendado'
 const CAMPAIGN_STATUS_OPTIONS = ['ativa','pausada','encerrada','inativa'];
 // Local KM cache still exists as fallback, but primary persistence is backend + Mongo.
 const KM_LOCAL_STORAGE_VERSION = 'v3'; // v3: odometer != km percorrido; stale data cleared
-const KM_GOAL_PER_DRIVER_30_DAYS = 3000;
-const KM_GOAL_DEFAULT_DAYS = 30;
-const KM_DEFAULT_MIN_PER_DRIVER = KM_GOAL_PER_DRIVER_30_DAYS;
+const KM_GOAL_PER_DRIVER_MONTH = 3000;
+const KM_GOAL_DEFAULT_MONTHS = 1;
+const KM_DEFAULT_MIN_PER_DRIVER = KM_GOAL_PER_DRIVER_MONTH;
 
 // ── Cache localStorage removido (dados grandes demais para localStorage) ──
 function saveCampaignToStorage(_id, _data) { /* noop */ }
@@ -1192,6 +1192,14 @@ function formatNumber(value) {
   return Number.isFinite(parsed) ? parsed.toLocaleString('pt-BR') : String(value);
 }
 
+function formatGoalMonths(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return '-';
+  const rounded = Math.round(parsed);
+  if (Math.abs(parsed - rounded) < 0.0001) return rounded.toLocaleString('pt-BR');
+  return parsed.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
@@ -1258,20 +1266,90 @@ function getCampaignKmGoalDays(campaign = {}) {
     const days = campaignUtcDayNumber(end) - campaignUtcDayNumber(start) + 1;
     if (Number.isFinite(days) && days > 0) return days;
   }
-  return KM_GOAL_DEFAULT_DAYS;
+  return null;
+}
+
+function daysInUtcMonth(year, month) {
+  return new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+}
+
+function addUtcMonthsFromAnchor(date, months) {
+  const monthStart = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + months, 1));
+  const year = monthStart.getUTCFullYear();
+  const month = monthStart.getUTCMonth();
+  const day = Math.min(date.getUTCDate(), daysInUtcMonth(year, month));
+  return new Date(Date.UTC(year, month, day));
+}
+
+function isExactMonthAnchor(start, end) {
+  const startDay = campaignUtcDayNumber(start);
+  const endDay = campaignUtcDayNumber(end);
+  if (endDay <= startDay) return false;
+
+  const roughMonthSpan = Math.max(
+    1,
+    (end.getUTCFullYear() - start.getUTCFullYear()) * 12 + (end.getUTCMonth() - start.getUTCMonth()) + 1,
+  );
+
+  for (let offset = 1; offset <= roughMonthSpan + 1; offset += 1) {
+    const anchorDay = campaignUtcDayNumber(addUtcMonthsFromAnchor(start, offset));
+    if (anchorDay === endDay) return true;
+    if (anchorDay > endDay) return false;
+  }
+
+  return false;
+}
+
+function calculateCampaignMonthUnits(start, end) {
+  const startDay = campaignUtcDayNumber(start);
+  const endDay = campaignUtcDayNumber(end);
+  if (endDay < startDay) return 0;
+
+  const exclusiveEndDay = isExactMonthAnchor(start, end) ? endDay : endDay + 1;
+  let wholeMonths = 0;
+
+  while (campaignUtcDayNumber(addUtcMonthsFromAnchor(start, wholeMonths + 1)) <= exclusiveEndDay) {
+    wholeMonths += 1;
+  }
+
+  const cursorDay = campaignUtcDayNumber(addUtcMonthsFromAnchor(start, wholeMonths));
+  const nextCursorDay = campaignUtcDayNumber(addUtcMonthsFromAnchor(start, wholeMonths + 1));
+  const cycleDays = Math.max(1, nextCursorDay - cursorDay);
+  const remainingDays = Math.max(0, exclusiveEndDay - cursorDay);
+  return wholeMonths + (remainingDays / cycleDays);
+}
+
+function getCampaignKmGoalPeriod(campaign = {}) {
+  for (const [startValue, endValue] of getCampaignGoalPeriodCandidates(campaign)) {
+    const start = parseCampaignDate(startValue);
+    const end = parseCampaignDate(endValue);
+    if (!start || !end) continue;
+
+    const days = campaignUtcDayNumber(end) - campaignUtcDayNumber(start) + 1;
+    if (!Number.isFinite(days) || days <= 0) continue;
+
+    const months = calculateCampaignMonthUnits(start, end);
+    if (Number.isFinite(months) && months > 0) {
+      return { days, months, hasPeriod: true };
+    }
+  }
+
+  return { days: null, months: KM_GOAL_DEFAULT_MONTHS, hasPeriod: false };
 }
 
 function getCampaignKmGoal(campaign = {}, driverCount = 0) {
-  const days = getCampaignKmGoalDays(campaign);
-  const perDriver = Math.max(0, Math.round((KM_GOAL_PER_DRIVER_30_DAYS * days) / KM_GOAL_DEFAULT_DAYS));
+  const period = getCampaignKmGoalPeriod(campaign);
+  const perDriver = Math.max(0, Math.round(KM_GOAL_PER_DRIVER_MONTH * period.months));
   const totalDrivers = Math.max(0, Math.round(Number(driverCount) || 0));
   return {
-    days,
+    days: period.days,
+    months: period.months,
+    hasPeriod: period.hasPeriod,
     perDriver,
     total: perDriver * totalDrivers,
     driverCount: totalDrivers,
-    baseKm: KM_GOAL_PER_DRIVER_30_DAYS,
-    baseDays: KM_GOAL_DEFAULT_DAYS,
+    baseKm: KM_GOAL_PER_DRIVER_MONTH,
+    baseMonths: KM_GOAL_DEFAULT_MONTHS,
   };
 }
 
@@ -6107,7 +6185,10 @@ function renderSummaryDashboard(campaign, metrics = {}) {
   if (summaryKmProgressFill) summaryKmProgressFill.style.width = `${clamp(data.kmProgressPct, 0, 100)}%`;
   if (summaryKmRuleLabel) {
     const goal = data.kmGoal || getCampaignKmGoal(currentCampaign, data.totalDrivers);
-    summaryKmRuleLabel.textContent = `Regra: ${formatNumber(goal.baseKm)} KM por motorista a cada ${goal.baseDays} dias. Meta desta campanha: ${formatNumber(goal.perDriver)} KM por motorista em ${goal.days} dias × ${goal.driverCount} motoristas = ${formatNumber(goal.total)} KM.`;
+    const periodText = goal.hasPeriod
+      ? `${formatGoalMonths(goal.months)} mês(es) de campanha (${formatNumber(goal.days)} dias)`
+      : `${formatNumber(goal.baseMonths)} mês de campanha padrão`;
+    summaryKmRuleLabel.textContent = `Regra: ${formatNumber(goal.baseKm)} KM por motorista por mês. Período considerado: ${periodText}. Meta: ${formatNumber(goal.perDriver)} KM por motorista × ${goal.driverCount} motoristas = ${formatNumber(goal.total)} KM.`;
   }
 
   renderSummaryList(summaryKanbanToday, data.kanban.today);

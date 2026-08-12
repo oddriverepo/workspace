@@ -1805,7 +1805,7 @@ router.patch('/:id', async (req, res) => {
 
   if (kmMinimumRaw !== undefined) {
     return res.status(400).json({
-      error: 'kmMinimumPerDriver foi desativado. A meta de KM segue a regra fixa de 3.000 KM por motorista a cada 30 dias.',
+      error: 'kmMinimumPerDriver foi desativado. A meta de KM segue a regra fixa de 3.000 KM por motorista por mês-calendário.',
     });
   }
 

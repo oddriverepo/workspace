@@ -18,11 +18,11 @@ import { dispatchDriverCampaignMessage } from '../services/driver-outreach.js';
 import { listContacts, getTemplateById } from '../disparador/store/memory-store.js';
 import { createDispatchRun, completeDispatchRun } from '../disparador/services/mongo/dispatch-runs.repo.js';
 import { upsertRecipient as upsertCampaignRecipient } from '../disparador/services/mongo/campaign-recipients.repo.js';
+import { getCampaignKmGoal } from '../lib/campaignKmGoal.js';
 
 const router = Router();
 const COL_BOOKINGS = 'scheduling_bookings';
 
-const DEFAULT_MIN_KM_PER_DRIVER = 100;
 const HARD_LIMIT = 200;
 const DEFAULT_LIMIT = 50;
 
@@ -69,7 +69,8 @@ function buildDriverSummary(driver, campaign) {
  * Query: campaignId? (filtro), limit? (max 200)
  *
  * Critério: motoristas com status === 'instalado' (in_campaign) cujo
- * kmTravelledValue < kmMinimumPerDriver da respectiva campanha ativa.
+ * kmTravelledValue < meta operacional da respectiva campanha ativa.
+ * Regra: 3.000 KM por motorista por mês-calendário, proporcional nos meses parciais.
  */
 router.get('/drivers-low-km', authenticateAdmin, async (req, res) => {
   try {
@@ -91,9 +92,7 @@ router.get('/drivers-low-km', authenticateAdmin, async (req, res) => {
       if (filterCampaignId && d.campaignId !== filterCampaignId) continue;
 
       const camp = activeById.get(d.campaignId);
-      const kmMin = Number.isFinite(Number(camp.kmMinimumPerDriver))
-        ? Number(camp.kmMinimumPerDriver)
-        : DEFAULT_MIN_KM_PER_DRIVER;
+      const kmMin = getCampaignKmGoal(camp, 1).perDriver;
       const km = Number(d.kmTravelledValue || d.campaignData?.totalKms || 0);
 
       if (km >= kmMin) continue; // está acima do limite → não entra
