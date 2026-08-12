@@ -276,17 +276,23 @@ button { color: inherit; }
 
 .funnel-stage-group { display: flex; flex-direction: column; align-items: center; }
 .funnel-stage-group--direct { width: 96%; }
+.funnel-stage-group--registered { width: 92%; }
 .funnel-stage-group--resolved { width: 84%; }
 .funnel-stage-group--app { width: 76%; }
 .funnel-stage-group--campaign { width: 68%; }
 .funnel-stage-group > .funnel-stage { width: 100%; }
 .funnel-stage--interactive { border: 0; background: transparent; font: inherit; text-align: left; cursor: pointer; }
+.funnel-stage--nested { counter-increment: none; }
+.funnel-stage--nested > span::before { content: "APP"; }
 .funnel-stage--interactive:focus-visible { outline: 2px solid var(--stage-accent, var(--primary)); outline-offset: 3px; }
 .funnel-stage__toggle-icon { position: absolute; right: max(20px, 5%); bottom: 9px; width: 15px; height: 15px; fill: none; stroke: var(--stage-accent, var(--primary)); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform .2s ease; }
 .funnel-stage--interactive[aria-expanded="true"] .funnel-stage__toggle-icon { transform: rotate(180deg); }
 
 .funnel-branches { width: min(680px, 125%); max-height: 0; margin-top: 0; overflow: hidden; opacity: 0; transform: translateY(-7px); transition: max-height .3s ease, margin-top .25s ease, opacity .2s ease, transform .25s ease; }
 .funnel-branches.is-open { max-height: 220px; margin-top: 10px; opacity: 1; transform: translateY(0); }
+.funnel-branches--stage.is-open { max-height: 360px; }
+.funnel-branches--stage > .funnel-stage-group { position: relative; margin: 12px auto 0; }
+.funnel-branches--stage > .funnel-stage-group::before { content: ""; position: absolute; top: -12px; left: 50%; width: 1px; height: 12px; background: var(--line-strong); }
 .funnel-branch-grid { position: relative; display: grid; gap: 7px; padding-top: 12px; }
 .funnel-branch-grid::before { content: ""; position: absolute; top: 0; left: 12%; right: 12%; height: 1px; background: var(--line-strong); }
 .funnel-branch-grid--outcomes { grid-template-columns: repeat(5, minmax(0, 1fr)); }
@@ -380,6 +386,8 @@ button { color: inherit; }
 .crm-export-stage--summary .funnel-layout { display: block; }
 .crm-export-stage--summary .funnel-chart { max-width: 820px; }
 .crm-export-stage--summary .funnel-stage-group--direct { width: 96%; }
+.crm-export-stage--summary .funnel-stage-group--registered { width: 92%; }
+.crm-export-stage--summary .funnel-stage-group--registered > .funnel-stage { width: 100%; }
 .crm-export-stage--summary .funnel-stage--registered { width: 92%; }
 .crm-export-stage--summary .funnel-stage--forwarded { width: 88%; }
 .crm-export-stage--summary .funnel-stage-group--resolved { width: 84%; }
@@ -394,6 +402,8 @@ button { color: inherit; }
 .crm-export-stage--mobile .funnel-chart { max-width: 100%; gap: 8px; }
 .crm-export-stage--mobile .funnel-stage { min-height: 82px; padding: 12px 28px; }
 .crm-export-stage--mobile .funnel-stage-group--direct { width: 98%; }
+.crm-export-stage--mobile .funnel-stage-group--registered { width: 96%; }
+.crm-export-stage--mobile .funnel-stage-group--registered > .funnel-stage { width: 100%; }
 .crm-export-stage--mobile .funnel-stage--registered { width: 96%; }
 .crm-export-stage--mobile .funnel-stage--forwarded { width: 95%; }
 .crm-export-stage--mobile .funnel-stage-group--resolved { width: 94%; }
@@ -613,6 +623,7 @@ button { color: inherit; }
   .funnel-stage--direct { width: 98%; }
   .funnel-stage-group--direct { width: 98%; }
   .funnel-stage--registered { width: 96%; }
+  .funnel-stage-group--registered { width: 96%; }
   .funnel-stage--forwarded { width: 95%; }
   .funnel-stage-group--resolved { width: 94%; }
   .funnel-stage-group--app { width: 91%; }

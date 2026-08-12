@@ -65,6 +65,8 @@
     branchUnattributedChatsRate: document.getElementById('branchUnattributedChatsRate'),
     funnelRegistered: document.getElementById('funnelRegistered'),
     funnelRegisteredRate: document.getElementById('funnelRegisteredRate'),
+    btnToggleRegisteredBranches: document.getElementById('btnToggleRegisteredBranches'),
+    registeredBranches: document.getElementById('registeredBranches'),
     funnelForwarded: document.getElementById('funnelForwarded'),
     funnelForwardedRate: document.getElementById('funnelForwardedRate'),
     funnelResolved: document.getElementById('funnelResolved'),
@@ -1769,14 +1771,16 @@
     refs.funnelClickCost.textContent = metaAvailable
       ? 'CPC ' + formatCurrency(meta.cpc, currency)
       : 'META ADS indisponível';
-    refs.funnelAttributedConversations.textContent = metaAvailable ? number(attributedConversations) : '—';
-    refs.funnelAttributedRate.textContent = metaAvailable && clicks > 0
-      ? percentage(attributedConversations, clicks) + '% dos cliques'
-      : 'atribuição agregada da Meta';
-    refs.branchGptChats.textContent = directAvailable ? number(directConversations) : '—';
-    refs.branchGptChatsRate.textContent = directAvailable
-      ? '100% dos chats observados no período'
+    refs.funnelAttributedConversations.textContent = directAvailable ? number(directConversations) : '—';
+    refs.funnelAttributedRate.textContent = directAvailable
+      ? 'volume observado no GPT Maker'
       : 'GPT Maker indisponível';
+    refs.branchGptChats.textContent = metaAvailable ? number(attributedConversations) : '—';
+    refs.branchGptChatsRate.textContent = metaAvailable
+      ? (directAvailable && directConversations > 0
+        ? percentage(attributedConversations, directConversations) + '% dos chats totais'
+        : 'atribuição agregada da Meta')
+      : 'Meta Ads indisponível';
     refs.branchUnattributedChats.textContent = reconciliationAvailable ? number(unattributedChats) : '—';
     refs.branchUnattributedChatsRate.textContent = reconciliationAvailable
       ? (sourcesNotReconciled
@@ -1908,6 +1912,7 @@
       refs.branchCampaignNoDateRate.textContent = percentage(model.matches.inCampaignRegistrationDateUnavailable, model.matches.inCampaign) + '% dos que estão em campanha';
       refs.funnelMatchNotice.textContent = number(model.registered) + ' leads analisados';
       refs.funnelHeaderSummary.textContent = (metaAvailable ? number(clicks) + ' cliques · ' : '')
+        + (directAvailable ? number(directConversations) + ' chats totais · ' : '')
         + (metaAvailable ? number(attributedConversations) + ' conversas atribuídas · ' : '')
         + (reconciliationAvailable ? number(unattributedChats) + ' sem atribuição · ' : '')
         + number(model.registered) + ' registrados · ' + number(model.forwarded) + ' encaminhados · '
@@ -1954,6 +1959,7 @@
       refs.branchCampaignNoDateRate.textContent = 'dados indisponíveis';
       refs.funnelMatchNotice.textContent = 'Dados dos motoristas indisponíveis nesta atualização';
       refs.funnelHeaderSummary.textContent = (metaAvailable ? number(clicks) + ' cliques · ' : '')
+        + (directAvailable ? number(directConversations) + ' chats totais · ' : '')
         + (metaAvailable ? number(attributedConversations) + ' conversas atribuídas · ' : '')
         + (reconciliationAvailable ? number(unattributedChats) + ' sem atribuição · ' : '')
         + number(model.registered) + ' registrados · ' + number(model.forwarded) + ' encaminhados · ' + number(model.attended) + ' atendidos';
@@ -2489,6 +2495,9 @@
   });
   refs.btnToggleAttendedBranches.addEventListener('click', function () {
     toggleStageBranches(refs.btnToggleAttendedBranches, refs.attendedBranches);
+  });
+  refs.btnToggleRegisteredBranches.addEventListener('click', function () {
+    toggleStageBranches(refs.btnToggleRegisteredBranches, refs.registeredBranches);
   });
   refs.btnToggleAppBranches.addEventListener('click', function () {
     toggleStageBranches(refs.btnToggleAppBranches, refs.appBranches);

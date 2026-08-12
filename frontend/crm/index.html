@@ -118,7 +118,7 @@
           <span class="acquisition-toolbar__state" id="acquisitionSyncState">Aguardando consulta</span>
         </div>
         <div class="funnel-export-area" id="funnelExportArea">
-          <p class="funnel-note"><strong id="funnelPeriodLabel">Últimos 30 dias.</strong> A etapa de conversas atribuídas considera somente a atribuição agregada da Meta. Os demais chats do GPT Maker são exibidos separadamente e não confirmam, isoladamente, origem orgânica. Entre o GPT Maker e Leads registrados, o vínculo é estimado pelo nome do perfil e pela ordem das datas; a partir do registro, o telefone confirma o vínculo com o aplicativo.</p>
+          <p class="funnel-note"><strong id="funnelPeriodLabel">Últimos 30 dias.</strong> A etapa de chats totais considera os chats observados no GPT Maker. Nas ramificações, as conversas atribuídas usam a atribuição agregada da Meta e os chats sem atribuição não confirmam, isoladamente, origem orgânica. Entre o GPT Maker e Leads registrados, o vínculo é estimado pelo nome do perfil e pela ordem das datas; a partir do registro, o telefone confirma o vínculo com o aplicativo.</p>
 
           <div class="funnel-layout">
           <div class="funnel-chart" aria-label="Etapas do funil">
@@ -129,22 +129,42 @@
             </div>
             <div class="funnel-stage-group funnel-stage-group--direct">
               <button type="button" class="funnel-stage funnel-stage--direct funnel-stage--interactive" id="btnToggleAcquisitionBranches" aria-expanded="false" aria-controls="acquisitionBranches" title="Exibir conciliação entre Meta e GPT Maker">
-                <span>Conversas atribuídas aos anúncios</span>
+                <span>Chats totais</span>
                 <strong id="funnelAttributedConversations">—</strong>
-                <small id="funnelAttributedRate">aguardando Meta</small>
+                <small id="funnelAttributedRate">aguardando GPT Maker</small>
                 <svg class="funnel-stage__toggle-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"></path></svg>
               </button>
               <div class="funnel-branches" id="acquisitionBranches" aria-hidden="true">
                 <div class="funnel-branch-grid funnel-branch-grid--acquisition">
-                  <div class="funnel-branch funnel-branch--direct"><span>Chats totais no GPT Maker</span><strong id="branchGptChats">—</strong><small id="branchGptChatsRate">volume observado no período</small></div>
+                  <div class="funnel-branch funnel-branch--direct"><span>Conversas atribuídas aos anúncios</span><strong id="branchGptChats">—</strong><small id="branchGptChatsRate">atribuição agregada da Meta</small></div>
                   <div class="funnel-branch funnel-branch--unattributed"><span>Sem atribuição publicitária</span><strong id="branchUnattributedChats">—</strong><small id="branchUnattributedChatsRate">não significa necessariamente orgânico</small></div>
                 </div>
               </div>
             </div>
-            <div class="funnel-stage funnel-stage--registered">
-              <span>Leads registrados</span>
-              <strong id="funnelRegistered">0</strong>
-              <small id="funnelRegisteredRate">dados captados pelo agente</small>
+            <div class="funnel-stage-group funnel-stage-group--registered">
+              <button type="button" class="funnel-stage funnel-stage--registered funnel-stage--interactive" id="btnToggleRegisteredBranches" aria-expanded="false" aria-controls="registeredBranches" title="Exibir cadastros confirmados no aplicativo">
+                <span>Leads registrados</span>
+                <strong id="funnelRegistered">0</strong>
+                <small id="funnelRegisteredRate">dados captados pelo agente</small>
+                <svg class="funnel-stage__toggle-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"></path></svg>
+              </button>
+              <div class="funnel-branches funnel-branches--stage" id="registeredBranches" aria-hidden="true">
+                <div class="funnel-stage-group funnel-stage-group--app funnel-stage-group--nested">
+                  <button type="button" class="funnel-stage funnel-stage--app funnel-stage--nested funnel-stage--interactive" id="btnToggleAppBranches" aria-expanded="false" aria-controls="appBranches" title="Exibir origem dos cadastros confirmados">
+                    <span>Cadastro confirmado no app</span>
+                    <strong id="funnelAppConfirmed">0</strong>
+                    <small id="funnelAppRate">0% dos registrados</small>
+                    <svg class="funnel-stage__toggle-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"></path></svg>
+                  </button>
+                  <div class="funnel-branches" id="appBranches" aria-hidden="true">
+                    <div class="funnel-branch-grid funnel-branch-grid--app">
+                      <div class="funnel-branch funnel-branch--registered"><span>Cadastraram depois</span><strong id="branchAppRegisteredAfter">0</strong><small id="branchAppRegisteredAfterRate">0% dos confirmados</small></div>
+                      <div class="funnel-branch funnel-branch--existing"><span>Já eram cadastrados</span><strong id="branchAppAlreadyRegistered">0</strong><small id="branchAppAlreadyRegisteredRate">0% dos confirmados</small></div>
+                      <div class="funnel-branch funnel-branch--pending"><span>Sem data comparável</span><strong id="branchAppNoDate">0</strong><small id="branchAppNoDateRate">0% dos confirmados</small></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
             <div class="funnel-stage funnel-stage--forwarded">
               <span>Encaminhados</span>
@@ -165,21 +185,6 @@
                   <div class="funnel-branch funnel-branch--lost"><span>Perdidos</span><strong id="branchOutcomeLost">0</strong><small id="branchOutcomeLostRate">0% dos atendidos</small></div>
                   <div class="funnel-branch funnel-branch--waiting"><span>Não responderam</span><strong id="branchOutcomeNoAnswer">0</strong><small id="branchOutcomeNoAnswerRate">0% dos atendidos</small></div>
                   <div class="funnel-branch funnel-branch--pending"><span>Sem resultado</span><strong id="branchOutcomePending">0</strong><small id="branchOutcomePendingRate">0% dos atendidos</small></div>
-                </div>
-              </div>
-            </div>
-            <div class="funnel-stage-group funnel-stage-group--app">
-              <button type="button" class="funnel-stage funnel-stage--app funnel-stage--interactive" id="btnToggleAppBranches" aria-expanded="false" aria-controls="appBranches" title="Exibir origem dos cadastros confirmados">
-                <span>Cadastro confirmado no app</span>
-                <strong id="funnelAppConfirmed">0</strong>
-                <small id="funnelAppRate">0% dos registrados</small>
-                <svg class="funnel-stage__toggle-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"></path></svg>
-              </button>
-              <div class="funnel-branches" id="appBranches" aria-hidden="true">
-                <div class="funnel-branch-grid funnel-branch-grid--app">
-                  <div class="funnel-branch funnel-branch--registered"><span>Cadastraram depois</span><strong id="branchAppRegisteredAfter">0</strong><small id="branchAppRegisteredAfterRate">0% dos confirmados</small></div>
-                  <div class="funnel-branch funnel-branch--existing"><span>Já eram cadastrados</span><strong id="branchAppAlreadyRegistered">0</strong><small id="branchAppAlreadyRegisteredRate">0% dos confirmados</small></div>
-                  <div class="funnel-branch funnel-branch--pending"><span>Sem data comparável</span><strong id="branchAppNoDate">0</strong><small id="branchAppNoDateRate">0% dos confirmados</small></div>
                 </div>
               </div>
             </div>
