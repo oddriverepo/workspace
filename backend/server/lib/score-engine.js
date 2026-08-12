@@ -12,6 +12,8 @@
  *  - semProblemas: peso 0.05  — ausência de status "problema"
  */
 
+import { getCampaignKmGoal } from './campaignKmGoal.js';
+
 const WEIGHTS = {
   km:           0.35,
   instalacao:   0.30,
@@ -42,13 +44,14 @@ export function scoreDriverCampaign(driver, campaign, bookings = [], evidenceEnt
 
   // ── KM ──────────────────────────────────────────────────────────
   const kmTravelled = Number(driver.kmTravelledValue || driver.campaignData?.totalKms || 0);
-  const kmMeta = Number(campaign.kmMinimumPerDriver || settings.kmMinimumPerDriver || 0);
+  const kmGoal = campaign.kmGoal || settings.kmGoal || getCampaignKmGoal(campaign, 1);
+  const kmMeta = Number(kmGoal?.perDriver || 0);
   let kmScore = null;
   if (kmMeta > 0) {
     kmScore = Math.min(5, (kmTravelled / kmMeta) * 5);
     kmScore = Math.max(0, kmScore);
   }
-  components.km = { score: kmScore, kmTravelled, kmMeta };
+  components.km = { score: kmScore, kmTravelled, kmMeta, kmGoal };
   if (kmScore !== null) {
     weightedSum += kmScore * WEIGHTS.km;
     totalWeight += WEIGHTS.km;
@@ -137,7 +140,7 @@ export function scoreDriverCampaign(driver, campaign, bookings = [], evidenceEnt
 
   // semProblemas nunca é null — totalWeight sempre > 0 aqui
   // Normaliza pela soma dos pesos efetivamente usados → resultado sempre 0–5,
-  // mesmo quando componentes são pulados (ex: km sem meta definida).
+  // mesmo quando componentes opcionais são pulados.
   const weightedScore = Math.min(5, Math.max(0, weightedSum / totalWeight));
 
   return { components, weightedScore, skipped: false };

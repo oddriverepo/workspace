@@ -1,4 +1,4 @@
-import { Router, json as jsonParser } from 'express';
+import { Router } from 'express';
 import crypto from 'crypto';
 import { nanoid } from 'nanoid';
 import { STATUS, normalizeStatus, normalizeName } from '../lib/normalize.js';
@@ -60,6 +60,7 @@ import { upsertCampaignSettings, getCampaignSettingsByIds } from '../services/mo
 import buildMasterHeader from '../lib/masterHeader.js';
 import { applyCanonicalRaw, buildSheetRowValues, mergeDriverRawSources } from '../lib/driverSheet.js';
 import { applyDriverKmSummary, parseKmNumber } from '../lib/driverKm.js';
+import { getCampaignKmGoal } from '../lib/campaignKmGoal.js';
 import { DRIVER_FLOW, GRAPHIC_FLOW, DRIVER_REQUIRED_STEPS, GRAPHIC_REQUIRED_STEPS } from '../lib/flows.js';
 import { authenticateAdmin } from '../middleware/authenticate-admin.js';
 import { logAudit } from '../middleware/audit.js';
@@ -113,7 +114,6 @@ const CAMPAIGN_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CAMPAIGN_CODE_LENGTH = 6;
 const MAX_KM_PERIODS = 12;
 const DEFAULT_KM_PERIODS = 3;
-const DEFAULT_MIN_KM_PER_DRIVER = 100;
 const DRIVER_REQUIRED_STEP_IDS = [...DRIVER_REQUIRED_STEPS];
 const GRAPHIC_REQUIRED_STEP_IDS = [...GRAPHIC_REQUIRED_STEPS];
 const ADHESION_INITIAL_ALIASES = [
@@ -476,14 +476,10 @@ function summarizeCampaign(db, campaign) {
   ensureCampaignCode(db, campaign);
   if (typeof campaign.driverCooldownDays !== 'number') campaign.driverCooldownDays = 10;
   if (typeof campaign.graphicCooldownDays !== 'number') campaign.graphicCooldownDays = 10;
-  if (!Number.isFinite(Number(campaign.kmMinimumPerDriver))) {
-    campaign.kmMinimumPerDriver = DEFAULT_MIN_KM_PER_DRIVER;
-  } else {
-    campaign.kmMinimumPerDriver = Math.max(0, Math.round(Number(campaign.kmMinimumPerDriver)));
-  }
   const drivers = db.drivers.filter(d => d.campaignId === campaign.id);
   const graphics = (db.graphics || []).filter(g => g.campaignId === campaign.id);
   const reviewItems = db.review.filter(r => r.campaignId === campaign.id);
+  const kmGoal = getCampaignKmGoal(campaign, drivers.length);
 
   const counts = drivers.reduce((acc, driver) => {
     const key = driver.status || 'revisar';
@@ -505,8 +501,9 @@ function summarizeCampaign(db, campaign) {
     sheetGid: campaign.sheetGid ?? null,
     driverCooldownDays: campaign.driverCooldownDays ?? 10,
     graphicCooldownDays: campaign.graphicCooldownDays ?? 10,
-    kmMinimumPerDriver: campaign.kmMinimumPerDriver,
-    minKmPerDriver: campaign.kmMinimumPerDriver,
+    kmGoal,
+    kmMinimumPerDriver: kmGoal.perDriver,
+    minKmPerDriver: kmGoal.perDriver,
   };
 }
 
@@ -621,7 +618,6 @@ function mergeCampaignWithLocal(apiCampaign, localCampaign, db) {
     if (localCampaign.campaignCode) base.campaignCode = localCampaign.campaignCode;
     if (typeof localCampaign.driverCooldownDays === 'number') base.driverCooldownDays = localCampaign.driverCooldownDays;
     if (typeof localCampaign.graphicCooldownDays === 'number') base.graphicCooldownDays = localCampaign.graphicCooldownDays;
-    if (typeof localCampaign.kmMinimumPerDriver === 'number') base.kmMinimumPerDriver = localCampaign.kmMinimumPerDriver;
     if (localCampaign.sheetId) base.sheetId = localCampaign.sheetId;
     if (localCampaign.sheetName) base.sheetName = localCampaign.sheetName;
     if (localCampaign.driveFolderId) base.driveFolderId = localCampaign.driveFolderId;
@@ -694,6 +690,8 @@ function buildCampaignListItem(campaign, {
   const driverTarget = configuredTarget > 0
     ? configuredTarget
     : (localTarget > 0 ? localTarget : 0);
+  const driverCount = Math.max(0, Number(driverStats?.driverCount) || 0);
+  const kmGoal = getCampaignKmGoal(campaign, driverCount);
 
   return {
     id,
@@ -707,9 +705,12 @@ function buildCampaignListItem(campaign, {
       metaKms: Number(apiData.metaKms ?? localCampaign?.apiData?.metaKms) || 0,
     },
     counts,
-    driverCount: Math.max(0, Number(driverStats?.driverCount) || 0),
+    driverCount,
     reviewCount: Math.max(0, Number(reviewCount) || 0),
     driverTarget,
+    kmGoal,
+    kmMinimumPerDriver: kmGoal.perDriver,
+    minKmPerDriver: kmGoal.perDriver,
     createdAt: campaign?.createdAt || localCampaign?.createdAt || null,
     updatedAt: campaign?.updatedAt || localCampaign?.updatedAt || null,
   };
@@ -766,47 +767,25 @@ router.get('/sync-history', async (req, res) => {
 
 /**
  * POST /api/campaigns/refresh
- * DESABILITADO — sync agora é feito por script externo.
+ * DESABILITADO — sync direto legado foi substituido pelo mirror MongoDB.
  * Mantido para compatibilidade, retorna erro informativo.
  */
 router.post('/refresh', async (req, res) => {
   res.status(410).json({
-    error: 'Sync direto desabilitado. Use o script externo sync-oddrive.ps1 ou POST /api/campaigns/sync-push.',
+    error: 'Sync direto desabilitado. Use o mirror manual em POST /api/campaigns/mirror-run.',
   });
 });
 
 /**
  * POST /api/campaigns/sync-push
- * Recebe dados brutos da API OdDrive enviados por um script local (PS/Node).
- * O script chama a API OdDrive do computador do usuário e envia os dados crus aqui.
- * O backend normaliza e grava no MongoDB.
- *
- * Body: { campaigns: [...raw API campaigns], drivers: [...raw API drivers] }
+ * DESABILITADO por segurança.
+ * Este era o fluxo legado que aceitava dados crus externos para escrita no MongoDB.
+ * O espelhamento oficial agora é feito pelo mirror direto/read-only do banco cliente.
  */
-router.post('/sync-push', jsonParser({ limit: '50mb' }), async (req, res) => {
-  try {
-    const { campaigns, drivers } = req.body || {};
-    if (!Array.isArray(campaigns) && !Array.isArray(drivers)) {
-      return res.status(400).json({ error: 'Body deve conter "campaigns" (array) e/ou "drivers" (array)' });
-    }
-
-    const { syncPush } = await import('../services/oddrive-sync.js');
-    const result = await syncPush({
-      campaigns: Array.isArray(campaigns) ? campaigns : [],
-      drivers: Array.isArray(drivers) ? drivers : [],
-    });
-
-    await logAudit(req, 'campaigns:sync-push', {
-      entityType: 'system',
-      data: { campaigns: result.campaigns, drivers: result.drivers },
-    });
-
-    const status = result.partial ? 207 : 200;
-    res.status(status).json(result);
-  } catch (err) {
-    console.error('[campaigns] sync-push error:', err?.message || err);
-    res.status(500).json({ error: 'Falha ao processar sync-push.' });
-  }
+router.post('/sync-push', async (_req, res) => {
+  res.status(410).json({
+    error: 'sync-push desativado. Use POST /api/campaigns/mirror-run.',
+  });
 });
 
 /**
@@ -1107,6 +1086,9 @@ router.get('/:id', async (req, res) => {
         cloneDriverForPayload(localDriver, evidenceByDriver.get(String(localDriver.id)) || [])
       );
     }
+    payload.kmGoal = getCampaignKmGoal(payload, payload.drivers.length);
+    payload.kmMinimumPerDriver = payload.kmGoal.perDriver;
+    payload.minKmPerDriver = payload.kmGoal.perDriver;
 
     payload.review = db.review.filter(r => r.campaignId === apiCampaign.id);
     payload.graphics = (db.graphics || []).filter(g => g.campaignId === apiCampaign.id);
@@ -1345,7 +1327,6 @@ router.post('/', async (req, res) => {
     sheetName: null,
     driverCooldownDays: 10,
     graphicCooldownDays: 10,
-    kmMinimumPerDriver: DEFAULT_MIN_KM_PER_DRIVER,
     sheetHeader: [
       'Nome',
       'Cidade',
@@ -1369,6 +1350,7 @@ router.post('/', async (req, res) => {
     createdAt: now,
     updatedAt: now,
   };
+  campaign.kmMinimumPerDriver = getCampaignKmGoal(campaign, 0).perDriver;
 
   db.campaigns.push(campaign);
   saveDB(db);
@@ -1821,6 +1803,12 @@ router.patch('/:id', async (req, res) => {
   const kmMinimumRaw = payload.kmMinimumPerDriver ?? payload.minKmPerDriver ?? payload.kmMinPerDriver;
   let touched = false;
 
+  if (kmMinimumRaw !== undefined) {
+    return res.status(400).json({
+      error: 'kmMinimumPerDriver foi desativado. A meta de KM segue a regra fixa de 3.000 KM por motorista a cada 30 dias.',
+    });
+  }
+
   if (payload.name && typeof payload.name === 'string') {
     campaign.name = trim(payload.name);
     touched = true;
@@ -1863,15 +1851,6 @@ router.patch('/:id', async (req, res) => {
       return res.status(400).json({ error: 'graphicCooldownDays invalido (0-365)' });
     }
     campaign.graphicCooldownDays = days;
-    touched = true;
-  }
-  if (kmMinimumRaw !== undefined) {
-    const kmMin = Number(kmMinimumRaw);
-    if (!Number.isFinite(kmMin) || kmMin < 0 || kmMin > 1000000) {
-      return res.status(400).json({ error: 'kmMinimumPerDriver invalido (0-1000000)' });
-    }
-    campaign.kmMinimumPerDriver = Math.round(kmMin);
-    campaign.kmRuleUpdatedAt = Date.now();
     touched = true;
   }
   if (payload.driverTarget !== undefined) {

@@ -2,6 +2,7 @@ import { MongoClient, ObjectId, GridFSBucket } from 'mongodb';
 import { applyCanonicalRaw } from '../lib/driverSheet.js';
 import { normalizeName } from '../lib/normalize.js';
 import { extractDriverKmSummary, parseKmNumber } from '../lib/driverKm.js';
+import { getCampaignKmGoal } from '../lib/campaignKmGoal.js';
 
 function getEnv(name, fallback = '') {
   const v = process.env[name];
@@ -543,8 +544,7 @@ export async function getUploadHeatmapByCampaign(campaignId) {
 
 export async function upsertCampaignRecord(campaign) {
   const database = await getDb();
-  const kmMinimumPerDriver = Number(campaign?.kmMinimumPerDriver ?? campaign?.minKmPerDriver);
-  const hasKmMinimumPerDriver = Number.isFinite(kmMinimumPerDriver) && kmMinimumPerDriver >= 0;
+  const kmGoal = getCampaignKmGoal(campaign, 0);
   const payload = {
     _id: campaign.id,
     name: campaign.name || null,
@@ -557,7 +557,8 @@ export async function upsertCampaignRecord(campaign) {
     km_sheet_id: campaign.kmSheetId || null,
     km_sheet_name: campaign.kmSheetName || null,
     km_periods: Number.isFinite(Number(campaign?.kmPeriods)) ? Number(campaign.kmPeriods) : null,
-    km_minimum_per_driver: hasKmMinimumPerDriver ? Math.round(kmMinimumPerDriver) : null,
+    km_minimum_per_driver: kmGoal.perDriver,
+    km_goal: kmGoal,
     km_rule_updated_at: campaign.kmRuleUpdatedAt ? new Date(campaign.kmRuleUpdatedAt) : null,
     driver_cooldown_days: Number.isFinite(Number(campaign?.driverCooldownDays))
       ? Number(campaign.driverCooldownDays)
@@ -1191,7 +1192,7 @@ export async function getCampaignRecordById(campaignId) {
   const database = await getDb();
   const doc = await database.collection(CAMPAIGNS_COLLECTION).findOne({ _id: campaignId });
   if (!doc) return null;
-  return {
+  const campaign = {
     id: String(doc._id),
     name: doc.name || '',
     client: doc.client || '',
@@ -1203,9 +1204,6 @@ export async function getCampaignRecordById(campaignId) {
     kmSheetId: doc.km_sheet_id || null,
     kmSheetName: doc.km_sheet_name || null,
     kmPeriods: Number.isFinite(Number(doc.km_periods)) ? Number(doc.km_periods) : null,
-    kmMinimumPerDriver: Number.isFinite(Number(doc.km_minimum_per_driver))
-      ? Number(doc.km_minimum_per_driver)
-      : null,
     driverCooldownDays: Number.isFinite(Number(doc.driver_cooldown_days))
       ? Number(doc.driver_cooldown_days)
       : null,
@@ -1216,6 +1214,10 @@ export async function getCampaignRecordById(campaignId) {
     createdAt: doc.created_at ? new Date(doc.created_at).getTime() : null,
     updatedAt: doc.updated_at ? new Date(doc.updated_at).getTime() : null,
   };
+  campaign.kmGoal = getCampaignKmGoal(campaign, 0);
+  campaign.kmMinimumPerDriver = campaign.kmGoal.perDriver;
+  campaign.minKmPerDriver = campaign.kmGoal.perDriver;
+  return campaign;
 }
 
 export async function findCampaignByCodeMongo(campaignCode) {
@@ -1223,7 +1225,7 @@ export async function findCampaignByCodeMongo(campaignCode) {
   const database = await getDb();
   const doc = await database.collection(CAMPAIGNS_COLLECTION).findOne({ campaign_code: campaignCode });
   if (!doc) return null;
-  return {
+  const campaign = {
     id: String(doc._id),
     name: doc.name || '',
     client: doc.client || '',
@@ -1235,9 +1237,6 @@ export async function findCampaignByCodeMongo(campaignCode) {
     kmSheetId: doc.km_sheet_id || null,
     kmSheetName: doc.km_sheet_name || null,
     kmPeriods: Number.isFinite(Number(doc.km_periods)) ? Number(doc.km_periods) : null,
-    kmMinimumPerDriver: Number.isFinite(Number(doc.km_minimum_per_driver))
-      ? Number(doc.km_minimum_per_driver)
-      : null,
     driverCooldownDays: Number.isFinite(Number(doc.driver_cooldown_days))
       ? Number(doc.driver_cooldown_days)
       : null,
@@ -1248,6 +1247,10 @@ export async function findCampaignByCodeMongo(campaignCode) {
     createdAt: doc.created_at ? new Date(doc.created_at).getTime() : null,
     updatedAt: doc.updated_at ? new Date(doc.updated_at).getTime() : null,
   };
+  campaign.kmGoal = getCampaignKmGoal(campaign, 0);
+  campaign.kmMinimumPerDriver = campaign.kmGoal.perDriver;
+  campaign.minKmPerDriver = campaign.kmGoal.perDriver;
+  return campaign;
 }
 
 export async function listCampaignGraphicsRecords(campaign) {

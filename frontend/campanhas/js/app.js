@@ -382,7 +382,7 @@ function renderDefaultCards(filtered = []) {
       infoRows.push(`<div class="card-info-row"><span class="card-label">Local</span><span class="card-value">${locationText}</span></div>`);
     }
     if (api.metaKms > 0) {
-      infoRows.push(`<div class="card-info-row"><span class="card-label">Meta KM</span><span class="card-value">${api.metaKms.toLocaleString('pt-BR')} km</span></div>`);
+      infoRows.push(`<div class="card-info-row"><span class="card-label">Meta API</span><span class="card-value">${api.metaKms.toLocaleString('pt-BR')} km</span></div>`);
     }
 
     const progressBar = summary.totalDrivers > 0
@@ -476,7 +476,7 @@ function renderPipelineBoard(filtered = []) {
         const detailLines = [];
         if (campaign.period) detailLines.push(`<div class="pipeline-detail"><span class="pipeline-detail-label">Período</span> ${escapeHTML(campaign.period)}</div>`);
         if (locationText) detailLines.push(`<div class="pipeline-detail"><span class="pipeline-detail-label">Local</span> ${locationText}</div>`);
-        if (api.metaKms > 0) detailLines.push(`<div class="pipeline-detail"><span class="pipeline-detail-label">Meta</span> ${api.metaKms.toLocaleString('pt-BR')} km</div>`);
+        if (api.metaKms > 0) detailLines.push(`<div class="pipeline-detail"><span class="pipeline-detail-label">Meta API</span> ${api.metaKms.toLocaleString('pt-BR')} km</div>`);
 
         const focusText = summary.pending > 0
           ? `${summary.pending} pendência(s) para tratar`
@@ -813,7 +813,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
 });
-
 
 
 

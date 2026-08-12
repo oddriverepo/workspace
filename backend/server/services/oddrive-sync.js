@@ -4,7 +4,8 @@
  * Camada MongoDB para campanhas e motoristas da OdDrive.
  *
  * - Leitura: read*() → consultas diretas ao MongoDB
- * - Escrita: syncPush() → recebe dados brutos do script externo, normaliza e grava
+ * - Escrita legada: syncPush() recebia dados brutos externos, normalizava e gravava
+ *   (rota HTTP desativada; fluxo oficial atual é o mirror direto em oddrive-mirror.js)
  *
  * Nenhuma chamada HTTP à API OdDrive é feita neste arquivo.
  *
@@ -16,6 +17,7 @@
 
 import { getDb } from './mongo.js';
 import { normalizeName } from '../lib/normalize.js';
+import { getCampaignKmGoal } from '../lib/campaignKmGoal.js';
 import { recordCacheEvent } from './runtime-telemetry.js';
 import {
   buildBrazilPhoneSuffixes,
@@ -29,7 +31,7 @@ const COL_SYNC_LOG  = 'api_sync_log';
 // ══════════════════════════════════════════
 //  CACHE EM MEMÓRIA (leitura)
 //  Evita consultas repetidas ao MongoDB Atlas durante navegação normal.
-//  Invalidado automaticamente ao receber novo syncPush.
+//  Invalidado automaticamente em escritas legadas/mirror quando aplicavel.
 // ══════════════════════════════════════════
 
 const READ_CACHE_TTL_MS = 90_000; // 90 segundos
@@ -335,7 +337,9 @@ export async function hasMongoData() {
 }
 
 // ══════════════════════════════════════════
-//  SYNC PUSH: receber dados brutos da API via script externo
+//  SYNC PUSH LEGADO: receber dados brutos via script externo
+//  A rota HTTP publica foi desativada por seguranca; manter somente para
+//  compatibilidade interna caso algum teste/import antigo ainda referencie.
 // ══════════════════════════════════════════
 
 /**
@@ -549,7 +553,7 @@ export function normalizeCampaign(apiCampaign) {
     ? `${formatDate(startDate)} - ${formatDate(endDate)}`
     : '';
 
-  return {
+  const campaign = {
     id: apiCampaign._id,
     name: (apiCampaign.title || '').trim(),
     client: '',        // nome do anunciante não vem da API; definido manualmente pelo admin
@@ -577,7 +581,6 @@ export function normalizeCampaign(apiCampaign) {
     campaignCode: '',
     driverCooldownDays: 10,
     graphicCooldownDays: 10,
-    kmMinimumPerDriver: 100,
     sheetId: null,
     sheetName: null,
     sheetHeader: [],
@@ -586,6 +589,9 @@ export function normalizeCampaign(apiCampaign) {
     updatedAt: Date.now(),
     _source: 'api',
   };
+  campaign.kmMinimumPerDriver = getCampaignKmGoal(campaign, 0).perDriver;
+  campaign.minKmPerDriver = campaign.kmMinimumPerDriver;
+  return campaign;
 }
 
 /**

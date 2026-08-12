@@ -302,7 +302,9 @@ const ADHESION_STATUS_OPTIONS = ['agendado', 'concluido', 'faltou', 'reagendado'
 const CAMPAIGN_STATUS_OPTIONS = ['ativa','pausada','encerrada','inativa'];
 // Local KM cache still exists as fallback, but primary persistence is backend + Mongo.
 const KM_LOCAL_STORAGE_VERSION = 'v3'; // v3: odometer != km percorrido; stale data cleared
-const KM_DEFAULT_MIN_PER_DRIVER = 100;
+const KM_GOAL_PER_DRIVER_30_DAYS = 3000;
+const KM_GOAL_DEFAULT_DAYS = 30;
+const KM_DEFAULT_MIN_PER_DRIVER = KM_GOAL_PER_DRIVER_30_DAYS;
 
 // ── Cache localStorage removido (dados grandes demais para localStorage) ──
 function saveCampaignToStorage(_id, _data) { /* noop */ }
@@ -1203,6 +1205,76 @@ function parseDateMillis(value) {
   return d.getTime();
 }
 
+function parseCampaignDate(value) {
+  if (value == null || value === '') return null;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const timestamp = value < 100000000000 ? value * 1000 : value;
+    const date = new Date(timestamp);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  const text = String(value).trim();
+  if (!text) return null;
+  const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) {
+    const date = new Date(Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3])));
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  const br = text.match(/^(\d{2})\/(\d{2})\/(\d{2,4})/);
+  if (br) {
+    const year = br[3].length === 2 ? Number(`20${br[3]}`) : Number(br[3]);
+    const date = new Date(Date.UTC(year, Number(br[2]) - 1, Number(br[1])));
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function campaignUtcDayNumber(date) {
+  return Math.floor(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()) / 86400000);
+}
+
+function getCampaignGoalPeriodCandidates(campaign = {}) {
+  const apiData = campaign?.apiData || {};
+  const candidates = [
+    [apiData.periodStart, apiData.periodEnd],
+    [campaign?.periodStart, campaign?.periodEnd],
+    [campaign?.startDate, campaign?.endDate],
+    [campaign?.startAt, campaign?.endAt],
+  ];
+  const period = String(campaign?.period || '').trim();
+  if (period) {
+    const parts = period.split(/\s+(?:-|a|até|ate)\s+/i).map(part => part.trim()).filter(Boolean);
+    if (parts.length >= 2) candidates.push([parts[0], parts[1]]);
+  }
+  return candidates;
+}
+
+function getCampaignKmGoalDays(campaign = {}) {
+  for (const [startValue, endValue] of getCampaignGoalPeriodCandidates(campaign)) {
+    const start = parseCampaignDate(startValue);
+    const end = parseCampaignDate(endValue);
+    if (!start || !end) continue;
+    const days = campaignUtcDayNumber(end) - campaignUtcDayNumber(start) + 1;
+    if (Number.isFinite(days) && days > 0) return days;
+  }
+  return KM_GOAL_DEFAULT_DAYS;
+}
+
+function getCampaignKmGoal(campaign = {}, driverCount = 0) {
+  const days = getCampaignKmGoalDays(campaign);
+  const perDriver = Math.max(0, Math.round((KM_GOAL_PER_DRIVER_30_DAYS * days) / KM_GOAL_DEFAULT_DAYS));
+  const totalDrivers = Math.max(0, Math.round(Number(driverCount) || 0));
+  return {
+    days,
+    perDriver,
+    total: perDriver * totalDrivers,
+    driverCount: totalDrivers,
+    baseKm: KM_GOAL_PER_DRIVER_30_DAYS,
+    baseDays: KM_GOAL_DEFAULT_DAYS,
+  };
+}
+
 function getKmLocalStorageKey() {
   return `oddrive:campaign:${campaignId}:km-local:${KM_LOCAL_STORAGE_VERSION}`;
 }
@@ -1391,10 +1463,7 @@ function ensureSummaryKmLocalState(campaign) {
   }
 
   state.drivers = nextDrivers;
-  const campaignMin = Number(campaign?.kmMinimumPerDriver ?? campaign?.minKmPerDriver);
-  if (Number.isFinite(campaignMin) && campaignMin >= 0) {
-    state.settings.minKmPerDriver = Math.round(campaignMin);
-  }
+  state.settings.minKmPerDriver = getSummaryMinKmPerDriver(campaign);
   if (!Number.isFinite(Number(state.settings?.minKmPerDriver))) {
     state.settings.minKmPerDriver = KM_DEFAULT_MIN_PER_DRIVER;
   }
@@ -1405,13 +1474,8 @@ function ensureSummaryKmLocalState(campaign) {
 }
 
 function getSummaryMinKmPerDriver(campaign) {
-  // Primary: API metaKms divided by number of drivers
-  const apiMeta = Number(campaign?.apiData?.metaKms);
   const totalDrivers = Array.isArray(campaign?.drivers) ? campaign.drivers.length : 0;
-  if (Number.isFinite(apiMeta) && apiMeta > 0 && totalDrivers > 0) {
-    return Math.round(apiMeta / totalDrivers);
-  }
-  return KM_DEFAULT_MIN_PER_DRIVER;
+  return getCampaignKmGoal(campaign, totalDrivers).perDriver;
 }
 
 // Calcula risco de não bater meta de KM com base no ritmo atual vs ritmo necessário.
@@ -5127,7 +5191,8 @@ function buildSummaryAnalytics(campaign, metrics = {}) {
   const totalDrivers = drivers.length;
   const counts = campaign?.counts || {};
   const reviewCount = Number(campaign?.reviewCount || counts?.revisar || 0);
-  const minKmPerDriver = getSummaryMinKmPerDriver(campaign);
+  const kmGoal = getCampaignKmGoal(campaign, totalDrivers);
+  const minKmPerDriver = kmGoal.perDriver;
   const driverItems = drivers.map(driver => asSummaryDriverItem(driver, minKmPerDriver, campaign));
 
   const criticalDrivers = driverItems.filter(item => item.risk === 'critical');
@@ -5143,7 +5208,7 @@ function buildSummaryAnalytics(campaign, metrics = {}) {
   const noTimeLeftDrivers = driverItems.filter(item => item.paceRisk?.state === 'no-time-left');
 
   const totalKm = Number(metrics?.totalKm || 0);
-  const kmMetaTotal = minKmPerDriver * totalDrivers;
+  const kmMetaTotal = kmGoal.total;
   const kmGap = Math.max(0, kmMetaTotal - totalKm);
   const kmProgressPct = kmMetaTotal > 0 ? (totalKm / kmMetaTotal) * 100 : 0;
   const problemCount = Number(counts?.problema || 0);
@@ -5319,6 +5384,7 @@ function buildSummaryAnalytics(campaign, metrics = {}) {
   return {
     totalDrivers,
     minKmPerDriver,
+    kmGoal,
     totalKm,
     kmMetaTotal,
     kmGap,
@@ -6040,14 +6106,8 @@ function renderSummaryDashboard(campaign, metrics = {}) {
   if (summaryKmGapLabel) summaryKmGapLabel.textContent = `Faltam ${formatKmCompact(data.kmGap)}`;
   if (summaryKmProgressFill) summaryKmProgressFill.style.width = `${clamp(data.kmProgressPct, 0, 100)}%`;
   if (summaryKmRuleLabel) {
-    const apiMeta = Number(currentCampaign?.apiData?.metaKms);
-    if (Number.isFinite(apiMeta) && apiMeta > 0 && data.totalDrivers > 0) {
-      summaryKmRuleLabel.textContent = `Meta da campanha: ${formatNumber(apiMeta)} KM ÷ ${data.totalDrivers} motoristas = ${formatNumber(data.minKmPerDriver)} KM por motorista.`;
-    } else if (Number.isFinite(apiMeta) && apiMeta > 0) {
-      summaryKmRuleLabel.textContent = `Meta da campanha: ${formatNumber(apiMeta)} KM. Sem motoristas para calcular meta individual.`;
-    } else {
-      summaryKmRuleLabel.textContent = `Meta padrão: ${formatNumber(data.minKmPerDriver)} KM por motorista (sem meta definida na API).`;
-    }
+    const goal = data.kmGoal || getCampaignKmGoal(currentCampaign, data.totalDrivers);
+    summaryKmRuleLabel.textContent = `Regra: ${formatNumber(goal.baseKm)} KM por motorista a cada ${goal.baseDays} dias. Meta desta campanha: ${formatNumber(goal.perDriver)} KM por motorista em ${goal.days} dias × ${goal.driverCount} motoristas = ${formatNumber(goal.total)} KM.`;
   }
 
   renderSummaryList(summaryKanbanToday, data.kanban.today);
@@ -6499,7 +6559,7 @@ function populateSummary(campaign, metrics = {}) {
     const infos = [
       campaign.sheetId && `Sheet ID: ${campaign.sheetId}`,
       campaign.sheetName && `Aba: ${campaign.sheetName}`,
-      summaryAnalytics && `Meta KM/motorista: ${formatNumber(summaryAnalytics.minKmPerDriver)}`,
+      summaryAnalytics && `Regra KM/motorista: ${formatNumber(summaryAnalytics.minKmPerDriver)}`,
     ].filter(Boolean);
     configInfo.textContent = infos.length ? infos.join(' | ') : configInfo.textContent;
   }
@@ -6711,11 +6771,7 @@ function renderCampaignData(data) {
     initCampaignCustomWidgets();
     _cwCampaignInitialized = true;
   } else if (window.CustomWidgets) {
-    const _minKm = Number(
-      currentCampaign?.kmMinimumPerDriver ??
-      currentCampaign?.minKmPerDriver ??
-      currentCampaign?.apiData?.kmMinimumPerDriver ?? 0
-    );
+    const _minKm = getSummaryMinKmPerDriver(currentCampaign);
     const _drvs = Array.isArray(currentCampaign.drivers) ? currentCampaign.drivers : [];
     if (_drvs.length && _minKm > 0) window.CustomWidgets.enrichDrivers(_drvs, _minKm);
     window.CustomWidgets.refresh('campaigns');
@@ -7642,11 +7698,7 @@ document.addEventListener('DOMContentLoaded', () => {
 function initCampaignCustomWidgets() {
   const host = document.getElementById('campaignCustomWidgetsHost');
   if (!host || !window.CustomWidgets) return;
-  const minKm = Number(
-    currentCampaign?.kmMinimumPerDriver ??
-    currentCampaign?.minKmPerDriver ??
-    currentCampaign?.apiData?.kmMinimumPerDriver ?? 0
-  );
+  const minKm = getSummaryMinKmPerDriver(currentCampaign);
   const drivers = Array.isArray(currentCampaign?.drivers) ? currentCampaign.drivers : [];
   if (drivers.length && minKm > 0) {
     window.CustomWidgets.enrichDrivers(drivers, minKm);

@@ -5,6 +5,7 @@ import { readSheetByRange, readSheetHeader, getSheetId } from '../services/sheet
 import { normalizeName } from '../lib/normalize.js';
 import { buildDriversFromRows, resolveSheetName } from '../lib/campaignImport.js';
 import { detectKmColumns } from '../lib/kmColumns.js';
+import { getCampaignKmGoal } from '../lib/campaignKmGoal.js';
 import { upsertCampaignRecord, upsertDriverRecord, upsertMasterRecord } from '../services/db.js';
 import { ensureLegacyStoreReady, loadLegacyDb, saveLegacyDb } from '../services/legacyStore.js';
 import { authenticateAdmin } from '../middleware/authenticate-admin.js';
@@ -70,7 +71,6 @@ function saveDB(db) {
 }
 
 const router = Router();
-const DEFAULT_MIN_KM_PER_DRIVER = 100;
 
 const REQUIRED_DRIVER_COLUMNS = [
   'DRIVER ID',
@@ -151,10 +151,10 @@ router.post('/campaign', authenticateAdmin, validateSpreadsheetId, requireFields
     sheetHeader: header,
     sheetGid,
     driveFolderId: null,
-    kmMinimumPerDriver: DEFAULT_MIN_KM_PER_DRIVER,
     createdAt: now,
     updatedAt: now,
   };
+  campObj.kmMinimumPerDriver = getCampaignKmGoal(campObj, 0).perDriver;
   ensureCampaignCode(db, campObj);
   db.campaigns = Array.isArray(db.campaigns) ? db.campaigns : [];
   db.campaigns.push(campObj);
