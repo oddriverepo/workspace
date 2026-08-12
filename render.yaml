@@ -124,6 +124,9 @@ services:
         value: ODDrive
       - key: ODDRIVE_FILIAL_ID
         sync: false
+      # IDs adicionais, separados por virgula; a filial principal continua acima.
+      - key: MIRROR_FILIAL_IDS
+        sync: false
       # MIRROR_ENABLED=0 mantém o job desligado até o cutover
       - key: MIRROR_ENABLED
         value: "0"

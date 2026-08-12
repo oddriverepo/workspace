@@ -3,8 +3,8 @@ import { getLiveDb, DEFAULT_MAX_TIME_MS } from './oddrive-live-client.js';
 import { getDb as getAppDb } from './mongo.js';
 import { normalizeCampaign, normalizeDriver } from './oddrive-sync.js';
 
-const FILIAL_ID = process.env.ODDRIVE_FILIAL_ID || '';
 const MT = DEFAULT_MAX_TIME_MS;
+const OBJECT_ID_PATTERN = /^[a-f0-9]{24}$/i;
 
 const DRIVER_PROJ = {
   name: 1, email: 1, cpf: 1, phone: 1, address: 1, rating_app: 1,
@@ -31,13 +31,57 @@ function idVariants(value) {
   return out;
 }
 
-function filialFilter() {
-  return FILIAL_ID ? { filial_id: { $in: idVariants(FILIAL_ID) } } : {};
+export function resolveMirrorFilialIds(env = process.env) {
+  const primary = String(env.ODDRIVE_FILIAL_ID || '').trim();
+  const additional = String(env.MIRROR_FILIAL_IDS || '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const configured = [primary, ...additional].filter(Boolean);
+  const invalidCount = configured.filter((value) => !OBJECT_ID_PATTERN.test(value)).length;
+
+  if (invalidCount) {
+    const err = new Error(`Configuração do mirror contém ${invalidCount} filial(is) inválida(s); use IDs MongoDB com 24 caracteres hexadecimais.`);
+    err.code = 'MIRROR_FILIAL_IDS_INVALID';
+    throw err;
+  }
+
+  const ids = [...new Set(configured.map((value) => value.toLowerCase()))];
+  if (!ids.length) {
+    const err = new Error('Nenhuma filial configurada para o mirror. Defina ODDRIVE_FILIAL_ID e, opcionalmente, MIRROR_FILIAL_IDS.');
+    err.code = 'MIRROR_FILIAL_IDS_MISSING';
+    throw err;
+  }
+  return ids;
 }
 
-async function buildCampaigns(liveDb) {
+function filialFilter(filialIds) {
+  return { filial_id: { $in: filialIds.flatMap(idVariants) } };
+}
+
+async function validateConfiguredFiliais(liveDb, filialIds) {
+  const rows = await liveDb.collection('filiais')
+    .find({ _id: { $in: filialIds.flatMap(idVariants) } }, { projection: { _id: 1, name: 1 } })
+    .maxTimeMS(MT)
+    .toArray();
+  const found = new Set(rows.map((row) => S(row._id).toLowerCase()));
+  const missingCount = filialIds.filter((id) => !found.has(id)).length;
+
+  if (missingCount) {
+    const err = new Error(`${missingCount} filial(is) configurada(s) não existem na coleção filiais; mirror cancelado antes da gravação.`);
+    err.code = 'MIRROR_FILIAL_IDS_NOT_FOUND';
+    throw err;
+  }
+
+  return new Map(rows.map((row) => [
+    S(row._id).toLowerCase(),
+    String(row.name || '').trim(),
+  ]));
+}
+
+async function buildCampaigns(liveDb, filialIds, filialNameById) {
   const camps = await liveDb.collection('campaigns')
-    .find(filialFilter(), { projection: CAMP_PROJ }).maxTimeMS(MT).toArray();
+    .find(filialFilter(filialIds), { projection: CAMP_PROJ }).maxTimeMS(MT).toArray();
 
   const sponsorIds = [...new Set(camps.map((c) => c.sponsor_id).filter(Boolean).map(S))];
   const sponsorOr = sponsorIds.flatMap(idVariants);
@@ -47,7 +91,8 @@ async function buildCampaigns(liveDb) {
     : [];
   const sponsorName = new Map(sponsors.map((s) => [S(s._id), s.name || '']));
 
-  const foreignFilial = camps.filter((c) => FILIAL_ID && c.filial_id && S(c.filial_id) !== FILIAL_ID).length;
+  const filialIdSet = new Set(filialIds);
+  const foreignFilial = camps.filter((c) => c.filial_id && !filialIdSet.has(S(c.filial_id).toLowerCase())).length;
 
   const toIso = (v) => (v instanceof Date ? v.toISOString() : (v ?? null));
   const normalized = camps.map((c) => {
@@ -63,15 +108,18 @@ async function buildCampaigns(liveDb) {
       },
     };
     const norm = normalizeCampaign(apiShape);
+    const filialId = S(c.filial_id).toLowerCase();
     norm.client = sponsorName.get(S(c.sponsor_id)) || '';
+    norm.filialId = filialId;
+    norm.filialName = filialNameById.get(filialId) || '';
     return norm;
   });
   return { normalized, foreignFilial };
 }
 
-async function buildDrivers(liveDb) {
+async function buildDrivers(liveDb, filialIds, filialNameById) {
   const dcs = await liveDb.collection('driver_campaign')
-    .find(filialFilter(), { projection: DC_PROJ }).maxTimeMS(MT).toArray();
+    .find(filialFilter(filialIds), { projection: DC_PROJ }).maxTimeMS(MT).toArray();
 
   const dcByDriver = new Map();
   const tsOf = (dc) => {
@@ -153,6 +201,11 @@ async function buildDrivers(liveDb) {
       } : null,
     };
     const norm = normalizeDriver(apiShape);
+    if (dc && norm.campaignData) {
+      const filialId = S(dc.filial_id).toLowerCase();
+      norm.campaignData.filialId = filialId;
+      norm.campaignData.filialName = filialNameById.get(filialId) || '';
+    }
     statusHist[norm.status] = (statusHist[norm.status] || 0) + 1;
     if (norm.campaignData && norm.campaignData.totalKms > 0) kmWithData++;
     return norm;
@@ -199,15 +252,21 @@ export async function runMirrorOnce(opts = {}) {
     throw err;
   }
 
-  let phase = 'connect';
+  let phase = 'configuration';
   try {
     log(`[mirror] início (${dryRun ? 'DRY-RUN → ' + campColl + '/' + drvColl : 'PROD'})`);
+    const filialIds = resolveMirrorFilialIds();
+
+    phase = 'connect';
     const liveDb = opts.liveDb || await getLiveDb();
 
+    phase = 'validateFiliais';
+    const filialNameById = await validateConfiguredFiliais(liveDb, filialIds);
+
     phase = 'buildCampaigns';
-    const { normalized: campaigns, foreignFilial } = await buildCampaigns(liveDb);
+    const { normalized: campaigns, foreignFilial } = await buildCampaigns(liveDb, filialIds, filialNameById);
     phase = 'buildDrivers';
-    const { normalized: drivers, statusHist, withCampaign, kmWithData } = await buildDrivers(liveDb);
+    const { normalized: drivers, statusHist, withCampaign, kmWithData } = await buildDrivers(liveDb, filialIds, filialNameById);
 
     phase = 'write';
     const stamp = start;
@@ -221,6 +280,7 @@ export async function runMirrorOnce(opts = {}) {
     const durationMs = Date.now() - start;
     const result = {
       dryRun, campaigns: campCount, drivers: drvCount, withCampaign, kmWithData,
+      filialCount: filialIds.length,
       prunedCampaigns, prunedDrivers,
       foreignFilial, statusHist, durationMs, timestamp: now,
       collections: { campaigns: campColl, drivers: drvColl },
@@ -232,6 +292,7 @@ export async function runMirrorOnce(opts = {}) {
         type: dryRun ? 'mirror-dryrun' : 'mirror',
         source: 'oddrive-mirror.js',
         campaigns: campCount, drivers: drvCount, driversWithCampaign: withCampaign, kmWithData,
+        filialCount: filialIds.length,
         foreignFilial, statusHist, durationMs, timestamp: now,
       });
     } catch (err) {
@@ -239,7 +300,7 @@ export async function runMirrorOnce(opts = {}) {
     }
 
     if (foreignFilial > 0) log(`[mirror] ${foreignFilial} campanhas com filial_id estranho`);
-    log(`[mirror] fim: ${campCount} campanhas, ${drvCount} motoristas (${withCampaign} com campanha, ${kmWithData} com km) em ${durationMs}ms`);
+    log(`[mirror] fim: ${campCount} campanhas, ${drvCount} motoristas, ${filialIds.length} filial(is) (${withCampaign} com campanha, ${kmWithData} com km) em ${durationMs}ms`);
     return result;
   } catch (err) {
     const durationMs = Date.now() - start;
