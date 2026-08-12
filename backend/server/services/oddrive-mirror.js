@@ -22,6 +22,16 @@ const CAMP_PROJ = {
   meta_kms: 1, current_status: 1, campaign_link: 1, images: 1, links: 1,
   created_by: 1, created_at: 1, filial_id: 1,
 };
+const DRIVER_DOCS_PROJ = {
+  driver_id: 1,
+  status: 1,
+  created_at: 1,
+  driver_document: 1,
+  driver_license: 1,
+  proof_of_address: 1,
+  vehicle_registration: 1,
+  app_rating: 1,
+};
 
 const S = (v) => (v && v._bsontype === 'ObjectId') ? v.toString() : (v == null ? '' : String(v));
 
@@ -29,6 +39,80 @@ function idVariants(value) {
   const out = [String(value)];
   try { out.push(new ObjectId(String(value))); } catch {}
   return out;
+}
+
+function toIso(value) {
+  return value instanceof Date ? value.toISOString() : (value || null);
+}
+
+function normalizeDocumentItem(item) {
+  if (!item || typeof item !== 'object') {
+    return {
+      sent: false,
+      name: '',
+      status: '',
+      link: '',
+      createdAt: null,
+      sourceId: '',
+    };
+  }
+
+  return {
+    sent: true,
+    name: item.name || '',
+    status: String(item.status || '').trim().toLowerCase(),
+    link: item.link || '',
+    createdAt: toIso(item.created_at),
+    sourceId: item._id ? S(item._id) : '',
+  };
+}
+
+function normalizeDriverDocuments(row, driverId = '') {
+  const items = {
+    driverDocument: normalizeDocumentItem(row?.driver_document),
+    driverLicense: normalizeDocumentItem(row?.driver_license),
+    proofOfAddress: normalizeDocumentItem(row?.proof_of_address),
+    vehicleRegistration: normalizeDocumentItem(row?.vehicle_registration),
+    appRating: normalizeDocumentItem(row?.app_rating),
+  };
+
+  const values = Object.values(items);
+  const sentCount = values.filter((item) => item.sent).length;
+  const approvedCount = values.filter((item) => item.status === 'approved').length;
+  const pendingCount = values.filter((item) => item.sent && ['pending', 'processing', 'analyzing', 'analysis'].includes(item.status)).length;
+  const rejectedCount = values.filter((item) => item.sent && ['rejected', 'refused', 'denied'].includes(item.status)).length;
+  const totalExpected = values.length;
+
+  return {
+    sourceId: row?._id ? S(row._id) : '',
+    driverId: row?.driver_id ? S(row.driver_id) : driverId,
+    status: !!row?.status,
+    createdAt: toIso(row?.created_at),
+    sentCount,
+    approvedCount,
+    pendingCount,
+    rejectedCount,
+    totalExpected,
+    missingCount: Math.max(totalExpected - sentCount, 0),
+    completed: sentCount === totalExpected,
+    allApproved: approvedCount === totalExpected,
+    items,
+  };
+}
+
+function documentRowTimestamp(row) {
+  const values = [
+    row?.created_at,
+    row?.driver_document?.created_at,
+    row?.driver_license?.created_at,
+    row?.proof_of_address?.created_at,
+    row?.vehicle_registration?.created_at,
+    row?.app_rating?.created_at,
+  ];
+  const stamps = values
+    .map((value) => new Date(value || 0).getTime())
+    .filter(Number.isFinite);
+  return stamps.length ? Math.max(...stamps) : 0;
 }
 
 export function resolveMirrorFilialIds(env = process.env) {
@@ -178,6 +262,21 @@ async function buildDrivers(liveDb, filialIds, filialNameById) {
   const drivers = await liveDb.collection('drivers')
     .find({}, { projection: DRIVER_PROJ }).maxTimeMS(MT).toArray();
 
+  const driverOids = drivers.map((d) => d._id).filter(Boolean);
+  const driverDocs = driverOids.length
+    ? await liveDb.collection('driver_documents')
+        .find({ driver_id: { $in: driverOids } }, { projection: DRIVER_DOCS_PROJ }).maxTimeMS(MT).toArray()
+    : [];
+  const docsByDriver = new Map();
+  for (const row of driverDocs) {
+    const key = S(row.driver_id);
+    if (!key) continue;
+    const prev = docsByDriver.get(key);
+    if (!prev || documentRowTimestamp(row) > documentRowTimestamp(prev)) {
+      docsByDriver.set(key, row);
+    }
+  }
+
   const statusHist = {};
   let kmWithData = 0;
   const normalized = drivers.map((d) => {
@@ -201,6 +300,7 @@ async function buildDrivers(liveDb, filialIds, filialNameById) {
       } : null,
     };
     const norm = normalizeDriver(apiShape);
+    norm.documentsData = normalizeDriverDocuments(docsByDriver.get(S(d._id)), S(d._id));
     if (dc && norm.campaignData) {
       const filialId = S(dc.filial_id).toLowerCase();
       norm.campaignData.filialId = filialId;

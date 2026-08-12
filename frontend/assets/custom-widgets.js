@@ -209,6 +209,109 @@
     return count > 0 ? 'Com fotos' : 'Sem fotos';
   }
 
+  const DRIVER_DOCUMENT_FIELDS = [
+    { key: 'driverDocument', label: 'Documento' },
+    { key: 'driverLicense', label: 'CNH' },
+    { key: 'proofOfAddress', label: 'Comprovante' },
+    { key: 'vehicleRegistration', label: 'CRLV' },
+    { key: 'appRating', label: 'Avaliação do app' },
+  ];
+
+  function getDriverDocumentsData(d) {
+    const docs = pick(d, 'documentsData', 'documents', 'raw.documentsData');
+    return docs && typeof docs === 'object' && !Array.isArray(docs) ? docs : {};
+  }
+
+  function getDriverDocumentItemStatus(item) {
+    if (!item || typeof item !== 'object') return 'missing';
+    const status = normalizeToken(item.status || '');
+    if (status === 'approved' || status === 'aprovado') return 'approved';
+    if (['rejected', 'reprovado', 'refused', 'denied', 'recusado'].includes(status)) return 'rejected';
+    if (['pending', 'processing', 'analyzing', 'analysis', 'em analise', 'em análise'].includes(status)) return 'pending';
+    return (item.link || item.url || item.createdAt || item.created_at) ? 'pending' : 'missing';
+  }
+
+  function getDriverDocumentSummary(d) {
+    const docs = getDriverDocumentsData(d);
+    const summary = {
+      total: DRIVER_DOCUMENT_FIELDS.length,
+      sent: 0,
+      approved: 0,
+      pending: 0,
+      rejected: 0,
+      missing: 0,
+      complete: false,
+      allApproved: false,
+    };
+
+    DRIVER_DOCUMENT_FIELDS.forEach(({ key }) => {
+      const status = getDriverDocumentItemStatus(docs[key]);
+      if (status === 'missing') {
+        summary.missing += 1;
+        return;
+      }
+      summary.sent += 1;
+      if (status === 'approved') summary.approved += 1;
+      else if (status === 'rejected') summary.rejected += 1;
+      else summary.pending += 1;
+    });
+
+    summary.complete = summary.sent >= summary.total;
+    summary.allApproved = summary.approved >= summary.total;
+    return summary;
+  }
+
+  function getDriverDocumentsBucket(d) {
+    const summary = getDriverDocumentSummary(d);
+    if (summary.sent === 0) return 'Sem documentos';
+    if (summary.complete) return 'Documentos completos';
+    return 'Documentos incompletos';
+  }
+
+  function getDriverDocumentsApprovalBucket(d) {
+    const summary = getDriverDocumentSummary(d);
+    if (summary.sent === 0) return 'Não enviados';
+    if (summary.rejected > 0) return 'Com rejeição';
+    if (summary.pending > 0) return 'Pendente/revisão';
+    if (summary.allApproved) return 'Aprovados';
+    return 'Enviados parcialmente';
+  }
+
+  function getDriverDocumentStatusLabel(d) {
+    const summary = getDriverDocumentSummary(d);
+    if (summary.sent === 0) return 'Sem documentos';
+    if (summary.rejected > 0) return `${summary.sent}/${summary.total} enviados, ${summary.rejected} rejeitado(s)`;
+    if (summary.pending > 0) return `${summary.sent}/${summary.total} enviados, ${summary.pending} pendente(s)`;
+    if (summary.allApproved) return 'Todos aprovados';
+    return `${summary.sent}/${summary.total} enviados`;
+  }
+
+  function getDriverDocumentTone(d) {
+    const summary = getDriverDocumentSummary(d);
+    if (summary.sent === 0 || summary.rejected > 0) return 'danger';
+    if (!summary.complete || summary.pending > 0) return 'warn';
+    return 'ok';
+  }
+
+  function buildDriverDocumentsList(items, ctx) {
+    return (items || []).map(driver => {
+      const campaignId = getDriverCampaignId(driver);
+      const campaign = campaignId ? ctx?.campaignsById?.get(campaignId) : null;
+      const city = String(pick(driver, 'city', 'address.city', 'apiData.city') || '').trim();
+      const phone = String(pick(driver, 'phone', 'whatsapp', 'contactPhone', 'apiData.phone') || '').trim();
+      const summary = getDriverDocumentSummary(driver);
+      return {
+        title: String(driver?.name || driver?.fullName || driver?.id || 'Motorista').trim(),
+        meta: [city, phone].filter(Boolean).join(' - '),
+        value: getDriverDocumentStatusLabel(driver),
+        detail: campaign ? (campaign.name || campaign.title || 'Campanha') : 'Sem campanha',
+        tone: getDriverDocumentTone(driver),
+        sortScore: (summary.missing * 100) + (summary.rejected * 50) + (summary.pending * 30) - summary.approved,
+      };
+    }).sort((a, b) => b.sortScore - a.sortScore || a.title.localeCompare(b.title, 'pt-BR'))
+      .slice(0, 40);
+  }
+
   // ── Definições de parâmetros ─────────────────────────────────────────────
   // type: 'chart' — produz distribuição (labels + valores) → renderizado como gráfico
   //       'kpi'   — produz um único número → renderizado como card de métrica
@@ -291,6 +394,36 @@
       unit: 'motoristas',
       accent: '#14b8a6',
       compute: (items) => items.filter(d => getDriverKmTravelled(d) > 0).length,
+    },
+    kpi_drivers_documents_complete: {
+      type: 'kpi',
+      label: 'Motoristas com documentos completos',
+      group: 'KPIs — Motoristas',
+      source: 'drivers',
+      unit: 'motoristas',
+      accent: '#10b981',
+      compute: (items) => items.filter(d => getDriverDocumentSummary(d).complete).length,
+    },
+    kpi_drivers_documents_missing: {
+      type: 'kpi',
+      label: 'Motoristas sem documentos',
+      group: 'KPIs — Motoristas',
+      source: 'drivers',
+      unit: 'motoristas',
+      accent: '#ef4444',
+      compute: (items) => items.filter(d => getDriverDocumentSummary(d).sent === 0).length,
+    },
+    kpi_drivers_documents_pending: {
+      type: 'kpi',
+      label: 'Motoristas com documentos pendentes',
+      group: 'KPIs — Motoristas',
+      source: 'drivers',
+      unit: 'motoristas',
+      accent: '#f59e0b',
+      compute: (items) => items.filter(d => {
+        const s = getDriverDocumentSummary(d);
+        return s.sent > 0 && (!s.complete || s.pending > 0 || s.rejected > 0);
+      }).length,
     },
     kpi_total_campaigns: {
       type: 'kpi',
@@ -379,6 +512,29 @@
       source: 'drivers',
       group_fn: (d) => getDriverPhotos(d),
       agg: 'count',
+    },
+    drivers_by_documents: {
+      type: 'chart',
+      label: 'Motoristas por envio de documentos',
+      group: 'Evidências',
+      source: 'drivers',
+      group_fn: (d) => getDriverDocumentsBucket(d),
+      agg: 'count',
+    },
+    drivers_by_documents_approval: {
+      type: 'chart',
+      label: 'Motoristas por status dos documentos',
+      group: 'Evidências',
+      source: 'drivers',
+      group_fn: (d) => getDriverDocumentsApprovalBucket(d),
+      agg: 'count',
+    },
+    drivers_documents_list: {
+      type: 'list',
+      label: 'Lista de documentos dos motoristas',
+      group: 'Evidências',
+      source: 'drivers',
+      list_fn: buildDriverDocumentsList,
     },
     // ── Motoristas — Localização ───────────────────────────────────────────
     drivers_by_city: {
@@ -488,11 +644,26 @@
   const CAMPAIGN_RELATED_PARAMS = new Set([
     'kpi_total_campaigns',
     'kpi_active_campaigns',
+    'kpi_drivers_documents_complete',
+    'kpi_drivers_documents_missing',
+    'kpi_drivers_documents_pending',
     'campaigns_by_status',
     'campaigns_by_client',
     'campaigns_by_city',
     'drivers_by_campaign',
+    'drivers_by_documents',
+    'drivers_by_documents_approval',
+    'drivers_documents_list',
     'km_total_by_campaign',
+  ]);
+
+  const DRIVER_DOCUMENT_PARAMS = new Set([
+    'kpi_drivers_documents_complete',
+    'kpi_drivers_documents_missing',
+    'kpi_drivers_documents_pending',
+    'drivers_by_documents',
+    'drivers_by_documents_approval',
+    'drivers_documents_list',
   ]);
 
   function widgetInvolvesCampaign(config) {
@@ -502,6 +673,11 @@
       || b?.source === 'campaigns'
       || CAMPAIGN_RELATED_PARAMS.has(config?.paramA)
       || CAMPAIGN_RELATED_PARAMS.has(config?.paramB);
+  }
+
+  function widgetInvolvesDocuments(config) {
+    return DRIVER_DOCUMENT_PARAMS.has(config?.paramA)
+      || DRIVER_DOCUMENT_PARAMS.has(config?.paramB);
   }
 
   function applyCampaignScope(items, def, config, ctx) {
@@ -519,22 +695,49 @@
     });
   }
 
+  function driverMatchesDocumentFilter(driver, filter, ctx) {
+    if (!filter || filter === 'all') return true;
+    const summary = getDriverDocumentSummary(driver);
+    const campaignId = getDriverCampaignId(driver);
+    const campaign = campaignId ? ctx?.campaignsById?.get(campaignId) : null;
+    const hasCampaign = Boolean(campaignId && campaign);
+    const isActiveCampaign = hasCampaign && isCampaignActive(campaign);
+
+    if (filter === 'active_campaign') return isActiveCampaign;
+    if (filter === 'without_campaign') return !hasCampaign;
+    if (filter === 'missing') return summary.sent === 0;
+    if (filter === 'incomplete') return summary.sent > 0 && !summary.complete;
+    if (filter === 'pending') return summary.pending > 0 || summary.rejected > 0 || (summary.sent > 0 && !summary.complete);
+    if (filter === 'complete') return summary.complete;
+    if (filter === 'approved') return summary.allApproved;
+    return true;
+  }
+
+  function applyDriverDocumentFilter(items, config, ctx) {
+    if (!widgetInvolvesDocuments(config)) return items;
+    const filter = config?.documentFilter || 'all';
+    if (filter === 'all') return items;
+    return (items || []).filter(driver => driverMatchesDocumentFilter(driver, filter, ctx));
+  }
+
   const CROSSWITH = {
     campaigns_by_status:        ['campaigns_by_client', 'campaigns_by_city'],
     campaigns_by_client:        ['campaigns_by_status', 'campaigns_by_city'],
     campaigns_by_city:          ['campaigns_by_status', 'campaigns_by_client'],
     // drivers: cruzamentos por status incluem todas as dimensões binárias de risco
-    drivers_by_status:          ['drivers_by_city', 'drivers_by_app', 'drivers_by_risk', 'drivers_by_adhesion', 'drivers_by_photos', 'drivers_by_km_range', 'drivers_by_km_data', 'drivers_by_stale'],
-    drivers_by_adhesion:        ['drivers_by_status', 'drivers_by_risk', 'drivers_by_city', 'drivers_by_app', 'drivers_by_km_data', 'drivers_by_stale'],
-    drivers_by_app:             ['drivers_by_status', 'drivers_by_risk', 'drivers_by_city', 'drivers_by_km_data'],
-    drivers_by_photos:          ['drivers_by_status', 'drivers_by_risk'],
-    drivers_by_city:            ['drivers_by_status', 'drivers_by_risk', 'drivers_by_app', 'drivers_by_adhesion', 'drivers_by_km_range'],
-    drivers_by_campaign:        ['drivers_by_status', 'drivers_by_risk'],
+    drivers_by_status:          ['drivers_by_city', 'drivers_by_app', 'drivers_by_risk', 'drivers_by_adhesion', 'drivers_by_photos', 'drivers_by_documents', 'drivers_by_documents_approval', 'drivers_by_km_range', 'drivers_by_km_data', 'drivers_by_stale'],
+    drivers_by_adhesion:        ['drivers_by_status', 'drivers_by_risk', 'drivers_by_city', 'drivers_by_app', 'drivers_by_documents', 'drivers_by_documents_approval', 'drivers_by_km_data', 'drivers_by_stale'],
+    drivers_by_app:             ['drivers_by_status', 'drivers_by_risk', 'drivers_by_city', 'drivers_by_documents', 'drivers_by_documents_approval', 'drivers_by_km_data'],
+    drivers_by_photos:          ['drivers_by_status', 'drivers_by_risk', 'drivers_by_documents', 'drivers_by_documents_approval'],
+    drivers_by_documents:       ['drivers_by_status', 'drivers_by_campaign', 'drivers_by_city', 'drivers_by_risk', 'drivers_by_adhesion'],
+    drivers_by_documents_approval: ['drivers_by_status', 'drivers_by_campaign', 'drivers_by_city', 'drivers_by_risk', 'drivers_by_adhesion'],
+    drivers_by_city:            ['drivers_by_status', 'drivers_by_risk', 'drivers_by_app', 'drivers_by_adhesion', 'drivers_by_documents', 'drivers_by_documents_approval', 'drivers_by_km_range'],
+    drivers_by_campaign:        ['drivers_by_status', 'drivers_by_risk', 'drivers_by_documents', 'drivers_by_documents_approval'],
     // km por campanha é útil cruzado com risco/status dos motoristas
     km_total_by_campaign:       ['drivers_by_risk', 'drivers_by_status', 'drivers_by_adhesion'],
     km_by_driver:               ['drivers_by_risk'],
     km_progress_pct_by_driver:  ['drivers_by_risk'],
-    drivers_by_risk:            ['drivers_by_status', 'drivers_by_city', 'drivers_by_app', 'drivers_by_adhesion', 'drivers_by_photos', 'drivers_by_km_range', 'drivers_by_km_data', 'drivers_by_stale'],
+    drivers_by_risk:            ['drivers_by_status', 'drivers_by_city', 'drivers_by_app', 'drivers_by_adhesion', 'drivers_by_photos', 'drivers_by_documents', 'drivers_by_documents_approval', 'drivers_by_km_range', 'drivers_by_km_data', 'drivers_by_stale'],
     drivers_by_stale:           ['drivers_by_status', 'drivers_by_risk'],
     drivers_by_km_data:         ['drivers_by_status', 'drivers_by_risk'],
     drivers_by_km_range:        ['drivers_by_status', 'drivers_by_city', 'drivers_by_app', 'drivers_by_risk'],
@@ -593,13 +796,19 @@
 
     // ── KPI: retorna objeto com type:'kpi' e value numérico ─────────────────
     if (a.type === 'kpi') {
-      const items = applyCampaignScope(ctx[a.source] || [], a, config, ctx);
+      const items = applyDriverDocumentFilter(applyCampaignScope(ctx[a.source] || [], a, config, ctx), config, ctx);
       const value = a.compute(items);
       return { type: 'kpi', value, unit: a.unit || '', accent: a.accent || '#6366f1' };
     }
 
+    if (a.type === 'list') {
+      const items = applyDriverDocumentFilter(applyCampaignScope(ctx[a.source] || [], a, config, ctx), config, ctx);
+      const rows = typeof a.list_fn === 'function' ? a.list_fn(items, ctx) : [];
+      return { type: 'list', rows, total: items.length };
+    }
+
     // ── Chart: distribuição ─────────────────────────────────────────────────
-    const items = applyCampaignScope(ctx[a.source] || [], a, config, ctx);
+    const items = applyDriverDocumentFilter(applyCampaignScope(ctx[a.source] || [], a, config, ctx), config, ctx);
 
     // Sem cruzamento
     if (!config.paramB) {
@@ -736,6 +945,28 @@
   }
 
   // ── Populate selects (usando optgroup por categoria) ─────────────────────
+  function renderListCard(container, data) {
+    const rows = (data.rows || []).slice(0, 40);
+    if (!rows.length) {
+      container.innerHTML = '<div class="cw-empty">Sem motoristas para exibir.</div>';
+      return;
+    }
+    container.innerHTML = `
+      <div class="cw-list-widget">
+        ${rows.map(row => `
+          <div class="cw-list-row">
+            <div class="cw-list-main">
+              <div class="cw-list-title">${escapeHTML(row.title)}</div>
+              <div class="cw-list-meta">${escapeHTML(row.meta || row.detail || '')}</div>
+              ${row.detail && row.meta ? `<div class="cw-list-detail">${escapeHTML(row.detail)}</div>` : ''}
+            </div>
+            <span class="cw-list-pill cw-list-pill--${escapeHTML(row.tone || 'neutral')}">${escapeHTML(row.value || '')}</span>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
   function populateParamSelect(sel, context, includeNone, onlyCharts, crossWithKey) {
     sel.innerHTML = '';
     if (includeNone) {
@@ -773,13 +1004,13 @@
   function updateModalMode(paramKey) {
     if (!_modalRoot) return;
     const def = PARAMS[paramKey];
-    const isKpi = def?.type === 'kpi';
+    const isChart = def?.type === 'chart';
     // Seção de tipo de gráfico
     const chartSection = _modalRoot.querySelector('#cwChartTypes')?.closest('.cw-field');
     // Seção de cruzamento
     const crossSection = _modalRoot.querySelector('#cwParamB')?.closest('.cw-field');
-    if (chartSection) chartSection.style.display = isKpi ? 'none' : '';
-    if (crossSection) crossSection.style.display = isKpi ? 'none' : '';
+    if (chartSection) chartSection.style.display = isChart ? '' : 'none';
+    if (crossSection) crossSection.style.display = isChart ? '' : 'none';
   }
 
   // ── Modal de criação/edição ──────────────────────────────────────────────
@@ -792,7 +1023,23 @@
       paramA: form?.querySelector('#cwParamA')?.value,
       paramB: form?.querySelector('#cwParamB')?.value || null,
     };
-    const shouldShow = _activeModalState?.context === 'overview' && widgetInvolvesCampaign(config);
+    const shouldShow = _activeModalState?.context === 'overview'
+      && widgetInvolvesCampaign(config)
+      && !widgetInvolvesDocuments(config);
+    if (field) field.style.display = shouldShow ? '' : 'none';
+    if (!shouldShow && sel) sel.value = 'all';
+  }
+
+  function updateDocumentFilterMode() {
+    if (!_modalRoot) return;
+    const form = _modalRoot.querySelector('#cwModalForm');
+    const field = form?.querySelector('#cwDocumentFilterField');
+    const sel = form?.querySelector('#cwDocumentFilter');
+    const config = {
+      paramA: form?.querySelector('#cwParamA')?.value,
+      paramB: form?.querySelector('#cwParamB')?.value || null,
+    };
+    const shouldShow = widgetInvolvesDocuments(config);
     if (field) field.style.display = shouldShow ? '' : 'none';
     if (!shouldShow && sel) sel.value = 'all';
   }
@@ -832,6 +1079,20 @@
             <select id="cwCampaignScope" name="campaignScope">
               <option value="all">Todas as campanhas</option>
               <option value="active">Somente campanhas ativas</option>
+            </select>
+          </div>
+
+          <div class="cw-field" id="cwDocumentFilterField" style="display:none">
+            <label for="cwDocumentFilter">Filtro de documentos</label>
+            <select id="cwDocumentFilter" name="documentFilter">
+              <option value="all">Todos os motoristas</option>
+              <option value="active_campaign">Somente em campanhas ativas</option>
+              <option value="without_campaign">Sem campanha</option>
+              <option value="missing">Sem documentos enviados</option>
+              <option value="incomplete">Documentos incompletos</option>
+              <option value="pending">Pendentes ou com rejeição</option>
+              <option value="complete">Documentos completos</option>
+              <option value="approved">Todos aprovados</option>
             </select>
           </div>
 
@@ -906,6 +1167,7 @@
     const selA = form.querySelector('#cwParamA');
     const selB = form.querySelector('#cwParamB');
     const campaignScope = form.querySelector('#cwCampaignScope');
+    const documentFilter = form.querySelector('#cwDocumentFilter');
     populateParamSelect(selA, context, false, false);
 
     // Pre-fill paramA primeiro para poder filtrar as opções válidas de cruzamento
@@ -918,10 +1180,12 @@
     populateParamSelect(selB, context, true, true, selA.value);
     selB.value = editing?.paramB || '';
     if (campaignScope) campaignScope.value = editing?.campaignScope || 'all';
+    if (documentFilter) documentFilter.value = editing?.documentFilter || 'all';
 
     // Modo inicial (KPI vs chart)
     updateModalMode(selA.value);
     updateCampaignScopeMode();
+    updateDocumentFilterMode();
 
     // Quando muda o indicador A: re-filtra opções de B, atualiza modo e preview
     selA.onchange = () => {
@@ -930,11 +1194,13 @@
       populateParamSelect(selB, context, true, true, selA.value);
       selB.value = prevB; // tenta manter seleção anterior se ainda válida
       updateCampaignScopeMode();
+      updateDocumentFilterMode();
       updatePreview();
     };
 
     selB.onchange = () => {
       updateCampaignScopeMode();
+      updateDocumentFilterMode();
       updatePreview();
     };
 
@@ -956,6 +1222,7 @@
         paramB: selB.value || null,
         chartType: form.querySelector('input[name="chartType"]:checked')?.value || 'bar',
         campaignScope: campaignScope?.value || 'all',
+        documentFilter: documentFilter?.value || 'all',
         context,
       };
       if (!payload.title) { form.title.focus(); return; }
@@ -1000,6 +1267,7 @@
       paramB: form.querySelector('#cwParamB').value || null,
       chartType: form.querySelector('input[name="chartType"]:checked')?.value || 'bar',
       campaignScope: form.querySelector('#cwCampaignScope')?.value || 'all',
+      documentFilter: form.querySelector('#cwDocumentFilter')?.value || 'all',
     };
     const data = computeWidgetData(config, _activeModalState.ctx);
     const cardBody = _modalRoot.querySelector('.cw-preview-body');
@@ -1009,6 +1277,13 @@
       const c = cardBody.querySelector('canvas');
       if (c?._cwChart) { c._cwChart.destroy(); c._cwChart = null; }
       renderKpiCard(cardBody, data);
+      return;
+    }
+
+    if (data.type === 'list') {
+      const c = cardBody.querySelector('canvas');
+      if (c?._cwChart) { c._cwChart.destroy(); c._cwChart = null; }
+      renderListCard(cardBody, data);
       return;
     }
 
@@ -1032,22 +1307,26 @@
     const a = PARAMS[widget.paramA];
     const b = PARAMS[widget.paramB];
     const isKpi = a?.type === 'kpi';
+    const isList = a?.type === 'list';
     const subtitle = a ? ((!isKpi && b) ? `${a.label} × ${b.label}` : a.label) : '';
     const w = (typeof widget.w === 'number' && widget.w >= 1) ? widget.w : 1;
     const h = (typeof widget.h === 'number' && widget.h >= 1) ? widget.h : 1;
     const widthPx = typeof widget.widthPx === 'number' ? widget.widthPx : null;
     const heightPx = typeof widget.heightPx === 'number' ? widget.heightPx : null;
+    const defaultHeight = isList ? 320 : 270;
     const inlineStyle = widthPx
-      ? `width: ${widthPx}px; height: ${heightPx || 270}px; flex: 0 0 auto;`
+      ? `width: ${widthPx}px; height: ${heightPx || defaultHeight}px; flex: 0 0 auto;`
       : heightPx ? `height: ${heightPx}px;` : '';
     const bodyInner = isKpi
       ? `<div class="cw-kpi-body cw-kpi-body--loading">
            <div class="cw-kpi-number">—</div>
            <div class="cw-kpi-unit">${escapeHTML(a?.unit || '')}</div>
          </div>`
-      : `<canvas></canvas>`;
+      : isList
+        ? '<div class="cw-list-loading">Carregando lista...</div>'
+        : `<canvas></canvas>`;
     return `
-      <article class="cw-card${isKpi ? ' cw-card--kpi' : ''}" data-widget-id="${escapeHTML(widget.id)}"
+      <article class="cw-card${isKpi ? ' cw-card--kpi' : ''}${isList ? ' cw-card--list' : ''}" data-widget-id="${escapeHTML(widget.id)}"
                style="${inlineStyle}">
         <div class="cw-card-controls">
           <button type="button" class="cw-ctrl cw-ctrl-grip" title="Arrastar" aria-label="Arrastar">
@@ -1145,6 +1424,12 @@
       if (data.type === 'kpi') {
         const body = card.querySelector('.cw-card-body');
         renderKpiCard(body, data);
+        return;
+      }
+
+      if (data.type === 'list') {
+        const body = card.querySelector('.cw-card-body');
+        renderListCard(body, data);
         return;
       }
 

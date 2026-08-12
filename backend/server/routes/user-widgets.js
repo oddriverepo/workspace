@@ -20,12 +20,25 @@ const router = express.Router();
 const VALID_CONTEXTS  = new Set(['overview', 'campaigns']);
 const VALID_CHART_TYPES = new Set(['bar', 'line', 'pie', 'doughnut']);
 const VALID_CAMPAIGN_SCOPES = new Set(['all', 'active']);
+const VALID_DOCUMENT_FILTERS = new Set([
+  'all',
+  'active_campaign',
+  'without_campaign',
+  'missing',
+  'incomplete',
+  'pending',
+  'complete',
+  'approved',
+]);
 const VALID_PARAMS = new Set([
   // KPIs — Motoristas
   'kpi_total_drivers',
   'kpi_active_drivers',
   'kpi_critical_drivers',
   'kpi_drivers_with_km',
+  'kpi_drivers_documents_complete',
+  'kpi_drivers_documents_missing',
+  'kpi_drivers_documents_pending',
   // KPIs — KM
   'kpi_total_km',
   'kpi_historical_total_km',
@@ -42,9 +55,12 @@ const VALID_PARAMS = new Set([
   'drivers_by_adhesion',
   'drivers_by_app',
   'drivers_by_photos',
+  'drivers_by_documents',
+  'drivers_by_documents_approval',
   // Motoristas — Localização
   'drivers_by_city',
   'drivers_by_campaign',
+  'drivers_documents_list',
   // Motoristas — KM
   'km_total_by_campaign',
   'km_by_driver',
@@ -81,6 +97,7 @@ function validatePayload(body) {
   const paramB = body?.paramB ? String(body.paramB).trim() : null;
   const chartType = String(body?.chartType || 'bar').trim();
   const campaignScope = String(body?.campaignScope || 'all').trim();
+  const documentFilter = String(body?.documentFilter || 'all').trim();
 
   if (!title) return { error: 'Título obrigatório.' };
   if (!VALID_CONTEXTS.has(context)) return { error: 'Contexto inválido.' };
@@ -89,7 +106,9 @@ function validatePayload(body) {
   if (!VALID_CHART_TYPES.has(chartType)) return { error: 'Tipo de gráfico inválido.' };
   if (!VALID_CAMPAIGN_SCOPES.has(campaignScope)) return { error: 'Filtro de campanhas inválido.' };
 
-  return { value: { title, context, paramA, paramB, chartType, campaignScope } };
+  if (!VALID_DOCUMENT_FILTERS.has(documentFilter)) return { error: 'Filtro de documentos invalido.' };
+
+  return { value: { title, context, paramA, paramB, chartType, campaignScope, documentFilter } };
 }
 
 function serialize(doc) {
@@ -103,6 +122,7 @@ function serialize(doc) {
     paramB: doc.paramB || null,
     chartType: doc.chartType,
     campaignScope: VALID_CAMPAIGN_SCOPES.has(doc.campaignScope) ? doc.campaignScope : 'all',
+    documentFilter: VALID_DOCUMENT_FILTERS.has(doc.documentFilter) ? doc.documentFilter : 'all',
     position: typeof doc.position === 'number' ? doc.position : 0,
     w: typeof doc.w === 'number' && doc.w >= 1 ? doc.w : 1,
     h: typeof doc.h === 'number' && doc.h >= 1 ? doc.h : 1,

@@ -404,6 +404,134 @@ function formatDateTime(value) {
   }
 }
 
+const DRIVER_DOCUMENT_FIELDS = [
+  { key: 'driverDocument', label: 'Documento do motorista' },
+  { key: 'driverLicense', label: 'CNH' },
+  { key: 'proofOfAddress', label: 'Comprovante de endereço' },
+  { key: 'vehicleRegistration', label: 'Documento do veículo' },
+  { key: 'appRating', label: 'Avaliação do app' },
+];
+
+const DRIVER_DOCUMENT_STATUS_LABELS = {
+  approved: 'Aprovado',
+  pending: 'Pendente',
+  rejected: 'Reprovado',
+  refused: 'Reprovado',
+  review: 'Em análise',
+  reviewing: 'Em análise',
+  awaiting: 'Aguardando',
+  uploaded: 'Enviado',
+};
+
+function normalizeDriverDocumentStatus(value) {
+  const normalized = normalizeKey(value || '');
+  if (!normalized) return '';
+  if (normalized.includes('approv') || normalized.includes('aprov')) return 'approved';
+  if (normalized.includes('reject') || normalized.includes('reprov') || normalized.includes('recus')) return 'rejected';
+  if (normalized.includes('pend') || normalized.includes('aguard')) return 'pending';
+  if (normalized.includes('anal') || normalized.includes('review')) return 'review';
+  if (normalized.includes('upload') || normalized.includes('envi')) return 'uploaded';
+  return normalized.replace(/\s+/g, '-');
+}
+
+function getDriverDocumentsData(driver) {
+  const docs = driver?.documentsData || driver?.documents || driver?.raw?.documentsData || null;
+  return docs && typeof docs === 'object' ? docs : {};
+}
+
+function getDriverDocumentSummary(driver) {
+  const docs = getDriverDocumentsData(driver);
+  let sent = 0;
+  let approved = 0;
+
+  for (const field of DRIVER_DOCUMENT_FIELDS) {
+    const item = docs[field.key];
+    if (!item || typeof item !== 'object') continue;
+    if (item.link || item.status || item.createdAt || item.created_at) sent += 1;
+    if (normalizeDriverDocumentStatus(item.status) === 'approved') approved += 1;
+  }
+
+  return {
+    total: DRIVER_DOCUMENT_FIELDS.length,
+    sent,
+    approved,
+    complete: sent === DRIVER_DOCUMENT_FIELDS.length,
+  };
+}
+
+function renderDriverDocumentsSection(driver) {
+  const docs = getDriverDocumentsData(driver);
+  const summary = getDriverDocumentSummary(driver);
+  const section = document.createElement('div');
+  section.className = 'dd-section dd-documents-section';
+
+  const titleRow = document.createElement('div');
+  titleRow.className = 'dd-section-title dd-section-title--with-meta';
+
+  const title = document.createElement('span');
+  title.textContent = 'Documentos do motorista';
+  titleRow.appendChild(title);
+
+  const summaryBadge = document.createElement('span');
+  summaryBadge.className = `dd-docs-summary ${summary.complete ? 'is-complete' : summary.sent ? 'is-partial' : 'is-empty'}`;
+  summaryBadge.textContent = `${summary.sent}/${summary.total} enviados`;
+  titleRow.appendChild(summaryBadge);
+
+  section.appendChild(titleRow);
+
+  const grid = document.createElement('div');
+  grid.className = 'dd-documents-grid';
+
+  for (const field of DRIVER_DOCUMENT_FIELDS) {
+    const item = docs[field.key] && typeof docs[field.key] === 'object' ? docs[field.key] : null;
+    const link = item?.link || '';
+    const statusKey = normalizeDriverDocumentStatus(item?.status);
+    const statusLabel = item
+      ? (DRIVER_DOCUMENT_STATUS_LABELS[statusKey] || item.status || 'Enviado')
+      : 'Não enviado';
+    const dateValue = item?.createdAt || item?.created_at || item?.updatedAt || '';
+    const dateLabel = formatDateTime(dateValue);
+
+    const card = document.createElement('article');
+    card.className = `dd-document-card ${item ? 'has-document' : 'dd-document-card--missing'} ${statusKey ? `status-${statusKey}` : ''}`;
+
+    const head = document.createElement('div');
+    head.className = 'dd-document-head';
+
+    const name = document.createElement('div');
+    name.className = 'dd-document-name';
+    name.textContent = field.label;
+    head.appendChild(name);
+
+    const badge = document.createElement('span');
+    badge.className = `dd-document-status ${item ? `status-${statusKey || 'uploaded'}` : 'status-missing'}`;
+    badge.textContent = statusLabel;
+    head.appendChild(badge);
+
+    card.appendChild(head);
+
+    const meta = document.createElement('div');
+    meta.className = 'dd-document-meta';
+    meta.textContent = dateLabel ? `Enviado em ${dateLabel}` : (item ? 'Sem data de envio' : 'Documento ainda não encontrado');
+    card.appendChild(meta);
+
+    if (link) {
+      const action = document.createElement('a');
+      action.className = 'dd-document-link';
+      action.href = link;
+      action.target = '_blank';
+      action.rel = 'noopener noreferrer';
+      action.textContent = 'Abrir imagem';
+      card.appendChild(action);
+    }
+
+    grid.appendChild(card);
+  }
+
+  section.appendChild(grid);
+  return section;
+}
+
 function describeFlowState(flowStatus) {
   if (!flowStatus || (!flowStatus.hasUploads && !flowStatus.verifiedAt)) {
     return { className: 'is-pending', text: 'Sem envio' };
@@ -4858,6 +4986,8 @@ function renderDriverDetails(driver) {
   }
 
   // ── Seção editável: Status + Observações ────────────────────────────
+  driverDetailFields.appendChild(renderDriverDocumentsSection(driver));
+
   const header = getCampaignHeader();
   const driverRaw = driver.raw || {};
   const EDITABLE_KEYS = new Set(['status', 'observacoes', 'obs', 'observacao']);

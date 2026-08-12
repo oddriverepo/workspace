@@ -2789,6 +2789,111 @@ body.pipeline-pan-active {
   word-break:break-word; line-height:1.35;
 }
 
+.dd-section-title--with-meta{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.dd-docs-summary{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:22px;
+  padding:3px 9px;
+  border-radius:999px;
+  background:#eef5ff;
+  color:#1d6fd8;
+  border:1px solid #d7e7ff;
+  font-size:11px;
+  font-weight:700;
+  text-transform:none;
+  letter-spacing:0;
+  white-space:nowrap;
+}
+.dd-documents-grid{
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:10px;
+}
+.dd-document-card{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  min-height:112px;
+  padding:11px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:linear-gradient(180deg, #fff, #f8fbff);
+}
+.dd-document-card--missing{
+  background:#fbfcfe;
+  border-style:dashed;
+}
+.dd-document-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:8px;
+}
+.dd-document-name{
+  font-size:12px;
+  font-weight:800;
+  color:var(--text);
+  line-height:1.25;
+}
+.dd-document-status{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:3px 7px;
+  border-radius:999px;
+  background:#eef2f7;
+  color:#637083;
+  font-size:10px;
+  font-weight:800;
+  white-space:nowrap;
+}
+.dd-document-status.status-approved,
+.dd-document-status.status-aprovado{
+  background:#e8f8ef;
+  color:#058142;
+}
+.dd-document-status.status-pending,
+.dd-document-status.status-pendente,
+.dd-document-status.status-awaiting,
+.dd-document-status.status-review,
+.dd-document-status.status-reviewing,
+.dd-document-status.status-uploaded{
+  background:#fff6df;
+  color:#9a6500;
+}
+.dd-document-status.status-rejected,
+.dd-document-status.status-refused,
+.dd-document-status.status-reprovado{
+  background:#ffeceb;
+  color:#bf2f2f;
+}
+.dd-document-meta{
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+  color:var(--muted);
+  font-size:11px;
+  line-height:1.35;
+}
+.dd-document-link{
+  align-self:flex-start;
+  margin-top:auto;
+  color:#1d6fd8;
+  font-size:12px;
+  font-weight:700;
+  text-decoration:none;
+}
+.dd-document-link:hover{
+  text-decoration:underline;
+}
+
 /* Editable fields section */
 #driverDetailFields .dd-section .form-group{
   margin-top:0; margin-bottom:10px;
@@ -3453,6 +3558,11 @@ body.pipeline-pan-active {
   #driverDetailModal .modal-card{ padding:16px; }
   .dd-hero{ flex-direction:column; align-items:flex-start; gap:10px; }
   .dd-info-grid{ grid-template-columns:1fr; }
+  .dd-documents-grid{ grid-template-columns:1fr; }
+  .dd-section-title--with-meta{
+    align-items:flex-start;
+    flex-direction:column;
+  }
   .dd-info-cell--full{ grid-column:1; }
 }
 

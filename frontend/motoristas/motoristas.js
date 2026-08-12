@@ -102,6 +102,23 @@
 
   const WORKSPACE_OUTREACH_CAMPAIGN_ID = '__motoristas__';
   const WORKSPACE_OUTREACH_CAMPAIGN_NAME = 'Motoristas / Sem campanha';
+  const DRIVER_DOCUMENT_FIELDS = [
+    { key: 'driverDocument', label: 'Documento' },
+    { key: 'driverLicense', label: 'CNH' },
+    { key: 'proofOfAddress', label: 'Comprovante' },
+    { key: 'vehicleRegistration', label: 'Documento do veiculo' },
+    { key: 'appRating', label: 'Avaliacao do app' },
+  ];
+  const DRIVER_DOCUMENT_STATUS_LABELS = {
+    approved: 'Aprovado',
+    pending: 'Pendente',
+    rejected: 'Reprovado',
+    refused: 'Reprovado',
+    review: 'Em analise',
+    reviewing: 'Em analise',
+    awaiting: 'Aguardando',
+    uploaded: 'Enviado',
+  };
 
   const bulkComposer = {
     modeSelect: refs.bulkMessageMode,
@@ -1366,7 +1383,77 @@
       renderOverviewCard('Ultima resposta', operational.lastResponseAt ? formatDateTime(operational.lastResponseAt) : 'Nenhuma', operational.serviceWindowOpen ? ('Texto liberado ate ' + formatDateTime(operational.serviceWindowClosesAt)) : 'Aguardando novo retorno') +
       renderOverviewCard('Restrição atual', restriction.label, restriction.message, restriction.cardTone) +
       renderOverviewCard('Ultimo erro', lastError.title, lastError.message, lastError.cardTone) +
-      '</div>';
+      '</div>' +
+      renderDriverDocumentsOverview(driver);
+  }
+
+  function normalizeDriverDocumentStatus(value) {
+    var normalized = normalize(value || '');
+    if (!normalized) return '';
+    if (normalized.indexOf('approv') >= 0 || normalized.indexOf('aprov') >= 0) return 'approved';
+    if (normalized.indexOf('reject') >= 0 || normalized.indexOf('reprov') >= 0 || normalized.indexOf('recus') >= 0) return 'rejected';
+    if (normalized.indexOf('pend') >= 0 || normalized.indexOf('aguard') >= 0) return 'pending';
+    if (normalized.indexOf('anal') >= 0 || normalized.indexOf('review') >= 0) return 'review';
+    if (normalized.indexOf('upload') >= 0 || normalized.indexOf('envi') >= 0) return 'uploaded';
+    return normalized.replace(/\s+/g, '-');
+  }
+
+  function getDriverDocumentsData(driver) {
+    var docs = driver && (driver.documentsData || driver.documents || (driver.raw && driver.raw.documentsData));
+    return docs && typeof docs === 'object' ? docs : {};
+  }
+
+  function getDriverDocumentSummary(driver) {
+    var docs = getDriverDocumentsData(driver);
+    var sent = 0;
+    var approved = 0;
+
+    DRIVER_DOCUMENT_FIELDS.forEach(function (field) {
+      var item = docs[field.key];
+      if (!item || typeof item !== 'object') return;
+      if (item.link || item.status || item.createdAt || item.created_at) sent += 1;
+      if (normalizeDriverDocumentStatus(item.status) === 'approved') approved += 1;
+    });
+
+    return {
+      total: DRIVER_DOCUMENT_FIELDS.length,
+      sent: sent,
+      approved: approved,
+      complete: sent === DRIVER_DOCUMENT_FIELDS.length,
+    };
+  }
+
+  function renderDriverDocumentsOverview(driver) {
+    var docs = getDriverDocumentsData(driver);
+    var summary = getDriverDocumentSummary(driver);
+
+    var cards = DRIVER_DOCUMENT_FIELDS.map(function (field) {
+      var item = docs[field.key] && typeof docs[field.key] === 'object' ? docs[field.key] : null;
+      var link = item && item.link ? String(item.link) : '';
+      var statusKey = normalizeDriverDocumentStatus(item && item.status);
+      var statusLabel = item
+        ? (DRIVER_DOCUMENT_STATUS_LABELS[statusKey] || item.status || 'Enviado')
+        : 'Nao enviado';
+      var dateValue = item && (item.createdAt || item.created_at || item.updatedAt);
+      var dateLabel = formatDateTime(dateValue);
+
+      return '<article class="driver-doc-card ' + (item ? 'has-document' : 'is-missing') + ' status-' + esc(statusKey || 'missing') + '">' +
+        '<div class="driver-doc-card__head">' +
+        '<strong>' + esc(field.label) + '</strong>' +
+        '<span class="driver-doc-card__status">' + esc(statusLabel) + '</span>' +
+        '</div>' +
+        '<p>' + esc(dateLabel ? ('Enviado em ' + dateLabel) : (item ? 'Sem data de envio' : 'Documento ainda nao encontrado')) + '</p>' +
+        (link ? '<a href="' + esc(link) + '" target="_blank" rel="noopener noreferrer">Abrir documento</a>' : '') +
+        '</article>';
+    }).join('');
+
+    return '<section class="driver-documents-overview">' +
+      '<div class="driver-documents-overview__head">' +
+      '<span class="panel-eyebrow">Documentos</span>' +
+      '<strong>' + esc(summary.sent + '/' + summary.total + ' enviados') + '</strong>' +
+      '</div>' +
+      '<div class="driver-documents-overview__grid">' + cards + '</div>' +
+      '</section>';
   }
 
   function renderDetachedCampaignRestorePanel(driver) {

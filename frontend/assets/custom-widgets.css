@@ -562,3 +562,102 @@ body[data-theme="dark"] .cw-field input,
 body[data-theme="dark"] .cw-field select,
 body[data-theme="dark"] .cw-chart-type-inner,
 body[data-theme="dark"] .cw-preview { background: #0f1626; color: #cbd5e1; border-color: rgba(255, 255, 255, 0.08); }
+
+.cw-card--list {
+  min-height: 240px;
+  height: 320px;
+}
+
+.cw-card--list .cw-card-body {
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.cw-list-widget {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.cw-list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--cw-border);
+  border-radius: var(--cw-radius-sm);
+  background: #fff;
+}
+
+.cw-list-main {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.cw-list-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--cw-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cw-list-meta,
+.cw-list-detail {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--cw-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cw-list-pill {
+  flex: 0 0 auto;
+  max-width: 45%;
+  padding: 5px 8px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  white-space: normal;
+  color: #334155;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+}
+
+.cw-list-pill--ok {
+  color: #047857;
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.22);
+}
+
+.cw-list-pill--warn {
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.24);
+}
+
+.cw-list-pill--danger {
+  color: #dc2626;
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.22);
+}
+
+.cw-list-loading {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--cw-text-muted);
+  font-size: 12px;
+}
+
+body[data-theme="dark"] .cw-list-row {
+  background: #0f1626;
+  border-color: rgba(255, 255, 255, 0.08);
+}

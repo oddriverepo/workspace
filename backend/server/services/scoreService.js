@@ -8,6 +8,7 @@
 import { fetchDrivers, fetchCampaigns } from './db.js';
 import { getDb, getCampaignSettingsByIds } from './mongo.js';
 import { scoreDriverCampaign, aggregateDriverScore } from '../lib/score-engine.js';
+import { getCampaignKmGoal } from '../lib/campaignKmGoal.js';
 
 /**
  * Computa a pontuação de um motorista sem persistir.
@@ -50,7 +51,14 @@ export async function computeScore(phone) {
       }).toArray().catch(() => []),
     ]);
 
-    const result = scoreDriverCampaign(driver, campaign, bookings, storageEntries, settings);
+    const kmGoal = getCampaignKmGoal(campaign, 1);
+    const result = scoreDriverCampaign(
+      driver,
+      { ...campaign, kmMinimumPerDriver: kmGoal.perDriver, kmGoal },
+      bookings,
+      storageEntries,
+      { ...settings, kmMinimumPerDriver: kmGoal.perDriver, kmGoal },
+    );
     if (!result.skipped) {
       campaignScores.push({
         campaignId: driver.campaignId,
