@@ -24,6 +24,7 @@ const ADMIN_USERS_COLLECTION = 'admin_users';
 const AUDIT_LOG_COLLECTION = 'admin_audit_log';
 const REPRESENTATIVE_REQUESTS_COLLECTION = 'representative_requests';
 const CAMPAIGN_DRIVER_DETACHMENTS_COLLECTION = 'campaign_driver_detachments';
+const CAMPAIGN_DRIVER_OVERRIDES_COLLECTION = 'campaign_driver_overrides';
 
 let client = null;
 let db = null;
@@ -1082,6 +1083,8 @@ export async function ensureDatabaseSchema() {
     database.collection(EVIDENCE_COLLECTION).createIndex({ campaign_id: 1, driver_id: 1, created_at: -1 }),
     database.collection(CAMPAIGN_DRIVER_DETACHMENTS_COLLECTION)
       .createIndex({ campaignId: 1, status: 1, driverId: 1 }),
+    database.collection(CAMPAIGN_DRIVER_OVERRIDES_COLLECTION)
+      .createIndex({ campaignId: 1, driverId: 1 }),
   ]);
   return { created: true };
 }
@@ -1853,6 +1856,147 @@ export async function isCampaignDriverDetached(campaignId, driverId, driverCampa
   return true;
 }
 
+function normalizeCampaignDriverOverrideKey(campaignId, driverId) {
+  const normalizedCampaignId = String(campaignId || '').trim();
+  const normalizedDriverId = String(driverId || '').trim();
+  if (!normalizedCampaignId || !normalizedDriverId) {
+    throw new Error('campaignId e driverId sao obrigatorios');
+  }
+  return {
+    campaignId: normalizedCampaignId,
+    driverId: normalizedDriverId,
+    id: `${normalizedCampaignId}:${normalizedDriverId}`,
+  };
+}
+
+function compactObject(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value).filter(([, item]) => item !== undefined),
+  );
+}
+
+function normalizeOverrideAdmin(admin) {
+  if (!admin || typeof admin !== 'object') return null;
+  return compactObject({
+    id: admin.id != null ? String(admin.id).trim() : null,
+    username: admin.username != null ? String(admin.username).trim() : null,
+    name: admin.name != null ? String(admin.name).trim() : null,
+  });
+}
+
+export async function upsertCampaignDriverOverride({
+  campaignId,
+  driverId,
+  driverCampaignId = '',
+  campaignName = '',
+  driverName = '',
+  fields = {},
+  patch = {},
+  updatedBy = null,
+} = {}) {
+  const key = normalizeCampaignDriverOverrideKey(campaignId, driverId);
+  const database = await getDb();
+  const collection = database.collection(CAMPAIGN_DRIVER_OVERRIDES_COLLECTION);
+  const now = new Date();
+  const existing = await collection.findOne(
+    { _id: key.id },
+    { projection: { fields: 1, patch: 1 } },
+  );
+  const existingFields = existing?.fields && typeof existing.fields === 'object' && !Array.isArray(existing.fields)
+    ? existing.fields
+    : {};
+  const existingPatch = existing?.patch && typeof existing.patch === 'object' && !Array.isArray(existing.patch)
+    ? existing.patch
+    : {};
+  const normalizedFields = fields && typeof fields === 'object' && !Array.isArray(fields)
+    ? {
+      ...existingFields,
+      ...compactObject(fields),
+    }
+    : existingFields;
+  const normalizedPatch = patch && typeof patch === 'object' && !Array.isArray(patch)
+    ? {
+      ...existingPatch,
+      ...compactObject(patch),
+    }
+    : existingPatch;
+
+  await collection.updateOne(
+    { _id: key.id },
+    {
+      $set: {
+        campaignId: key.campaignId,
+        driverId: key.driverId,
+        driverCampaignId: String(driverCampaignId || '').trim() || null,
+        campaignName: String(campaignName || '').trim(),
+        driverName: String(driverName || '').trim(),
+        fields: normalizedFields,
+        patch: normalizedPatch,
+        updatedBy: normalizeOverrideAdmin(updatedBy),
+        updatedAt: now,
+      },
+      $setOnInsert: { createdAt: now },
+    },
+    { upsert: true },
+  );
+
+  return {
+    campaignId: key.campaignId,
+    driverId: key.driverId,
+    driverCampaignId: String(driverCampaignId || '').trim() || null,
+    updatedAt: now,
+  };
+}
+
+export async function getCampaignDriverOverride(campaignId, driverId) {
+  let key;
+  try {
+    key = normalizeCampaignDriverOverrideKey(campaignId, driverId);
+  } catch {
+    return null;
+  }
+  const database = await getDb();
+  return database.collection(CAMPAIGN_DRIVER_OVERRIDES_COLLECTION).findOne(
+    { _id: key.id },
+    {
+      projection: {
+        campaignId: 1,
+        driverId: 1,
+        driverCampaignId: 1,
+        fields: 1,
+        patch: 1,
+        updatedAt: 1,
+      },
+    },
+  );
+}
+
+export async function listCampaignDriverOverrides(campaignIds = []) {
+  const normalizedIds = Array.from(new Set(
+    (Array.isArray(campaignIds) ? campaignIds : [campaignIds])
+      .map(value => String(value || '').trim())
+      .filter(Boolean),
+  ));
+  if (!normalizedIds.length) return [];
+  const database = await getDb();
+  return database.collection(CAMPAIGN_DRIVER_OVERRIDES_COLLECTION)
+    .find(
+      { campaignId: { $in: normalizedIds } },
+      {
+        projection: {
+          campaignId: 1,
+          driverId: 1,
+          driverCampaignId: 1,
+          fields: 1,
+          patch: 1,
+          updatedAt: 1,
+        },
+      },
+    )
+    .toArray();
+}
+
 export default {
   uploadBase64ImageMongo,
   getDriverStorageBasePath,
@@ -1909,6 +2053,9 @@ export default {
   listCampaignDriverDetachments,
   listDetachedDriverIdsByCampaign,
   isCampaignDriverDetached,
+  upsertCampaignDriverOverride,
+  getCampaignDriverOverride,
+  listCampaignDriverOverrides,
   upsertDriverScore,
   getDriverScore,
 };

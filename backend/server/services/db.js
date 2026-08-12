@@ -3,7 +3,7 @@
  *
  * Camada de dados unificada:
  * - MongoDB (mongo.js) para dados locais (evidence, storage, admin, graphics, audit)
- * - MongoDB (oddrive-sync.js) para campanhas e motoristas (escrita via sync-push externo)
+ * - MongoDB (oddrive-sync.js) para campanhas e motoristas (dados oficiais via mirror)
  */
 
 import * as mongo from './mongo.js';
@@ -59,6 +59,9 @@ export const {
   listCampaignDriverDetachments,
   listDetachedDriverIdsByCampaign,
   isCampaignDriverDetached,
+  upsertCampaignDriverOverride,
+  getCampaignDriverOverride,
+  listCampaignDriverOverrides,
 } = mongo;
 
 // ── Campanhas e Motoristas: leitura do MongoDB (populado pelo sync) ──
@@ -113,8 +116,40 @@ export async function fetchCampaignDriverStats() {
 
   if (!statsByCampaign.size) return statsByCampaign;
 
+  const campaignIds = Array.from(statsByCampaign.keys());
+  const overrides = await mongo.listCampaignDriverOverrides(campaignIds);
+  const overridesByPair = new Map(
+    overrides.map(override => [campaignDriverPairKey(override.campaignId, override.driverId), override]),
+  );
+  const statusOverrides = overrides.filter(override => override?.patch?.status !== undefined);
+  if (statusOverrides.length) {
+    const overriddenDrivers = await sync.readDriverAssignmentsByIds(
+      statusOverrides.map(item => item.driverId),
+    );
+    const driversById = new Map();
+    for (const driver of overriddenDrivers) {
+      const id = String(driver?.id || driver?._id || '').trim();
+      if (id) driversById.set(id, driver);
+    }
+
+    for (const override of statusOverrides) {
+      const driver = driversById.get(String(override?.driverId || '').trim());
+      const campaignId = String(override?.campaignId || '').trim();
+      if (!driver || String(driver.campaignId || '').trim() !== campaignId) continue;
+      if (!overrideMatchesDriver(override, driver)) continue;
+
+      const stats = statsByCampaign.get(campaignId);
+      if (!stats) continue;
+      const fromStatus = String(driver.status || 'cadastrando').trim() || 'cadastrando';
+      const toStatus = String(override.patch.status || 'cadastrando').trim() || 'cadastrando';
+      if (fromStatus === toStatus) continue;
+      if ((stats.counts[fromStatus] || 0) > 0) stats.counts[fromStatus] -= 1;
+      stats.counts[toStatus] = (stats.counts[toStatus] || 0) + 1;
+    }
+  }
+
   const detachments = await mongo.listCampaignDriverDetachments(
-    Array.from(statsByCampaign.keys()),
+    campaignIds,
   );
   if (!detachments.length) return statsByCampaign;
 
@@ -135,7 +170,9 @@ export async function fetchCampaignDriverStats() {
 
     const stats = statsByCampaign.get(campaignId);
     if (!stats) continue;
-    const status = String(driver.status || 'cadastrando').trim() || 'cadastrando';
+    const override = overridesByPair.get(campaignDriverPairKey(campaignId, driver.id));
+    const effectiveDriver = override ? applyCampaignDriverOverrideView(driver, override) : driver;
+    const status = String(effectiveDriver.status || 'cadastrando').trim() || 'cadastrando';
     if ((stats.counts[status] || 0) > 0) stats.counts[status] -= 1;
     if (stats.driverCount > 0) stats.driverCount -= 1;
   }
@@ -175,12 +212,81 @@ async function applyCurrentCampaignDetachments(drivers = []) {
   return drivers.map(driver => applyDetachedDriverView(driver, detachedPairs));
 }
 
+function overrideMatchesDriver(override, driver) {
+  if (!override || !driver) return false;
+  const overrideAssignmentId = String(override.driverCampaignId || '').trim();
+  const currentAssignmentId = driverCampaignAssignmentId(driver);
+  return !overrideAssignmentId || !currentAssignmentId || overrideAssignmentId === currentAssignmentId;
+}
+
+function applyCampaignDriverOverrideView(driver, override) {
+  if (!overrideMatchesDriver(override, driver)) return driver;
+  const fields = override.fields && typeof override.fields === 'object' && !Array.isArray(override.fields)
+    ? override.fields
+    : {};
+  const patch = override.patch && typeof override.patch === 'object' && !Array.isArray(override.patch)
+    ? override.patch
+    : {};
+
+  const merged = {
+    ...driver,
+    raw: {
+      ...(driver.raw && typeof driver.raw === 'object' ? driver.raw : {}),
+      ...fields,
+    },
+  };
+
+  if (patch.name !== undefined) merged.name = patch.name;
+  if (patch.nameKey !== undefined) merged.nameKey = patch.nameKey;
+  if (patch.city !== undefined) merged.city = patch.city;
+  if (patch.pix !== undefined) merged.pix = patch.pix;
+  if (patch.status !== undefined) merged.status = patch.status;
+  if (patch.statusRaw !== undefined) merged.statusRaw = patch.statusRaw;
+  if (Object.prototype.hasOwnProperty.call(patch, 'schedule')) {
+    if (patch.schedule && typeof patch.schedule === 'object' && !Array.isArray(patch.schedule)) {
+      merged.schedule = {
+        ...(driver.schedule && typeof driver.schedule === 'object' ? driver.schedule : {}),
+        ...patch.schedule,
+      };
+    } else {
+      delete merged.schedule;
+    }
+  }
+  if (override.updatedAt) {
+    const updatedAt = new Date(override.updatedAt).getTime();
+    if (Number.isFinite(updatedAt)) merged.updatedAt = updatedAt;
+  }
+
+  merged._workspaceOverride = true;
+  return merged;
+}
+
+async function applyCampaignDriverOverrides(drivers = []) {
+  if (!Array.isArray(drivers) || !drivers.length) return drivers;
+  const campaignIds = Array.from(new Set(
+    drivers.map(driver => String(driver?.campaignId || '').trim()).filter(Boolean),
+  ));
+  if (!campaignIds.length) return drivers;
+
+  const overrides = await mongo.listCampaignDriverOverrides(campaignIds);
+  if (!overrides.length) return drivers;
+
+  const overridesByPair = new Map(
+    overrides.map(override => [campaignDriverPairKey(override.campaignId, override.driverId), override]),
+  );
+  return drivers.map(driver => {
+    const override = overridesByPair.get(campaignDriverPairKey(driver?.campaignId, driver?.id));
+    return applyCampaignDriverOverrideView(driver, override);
+  });
+}
+
 export async function fetchDrivers() {
-  return applyCurrentCampaignDetachments(await sync.readDrivers());
+  const drivers = await applyCampaignDriverOverrides(await sync.readDrivers());
+  return applyCurrentCampaignDetachments(drivers);
 }
 
 export async function fetchDriversByCampaign(campaignId) {
-  const drivers = await sync.readDriversByCampaign(campaignId);
+  const drivers = await applyCampaignDriverOverrides(await sync.readDriversByCampaign(campaignId));
   return filterDetachedCampaignDrivers(campaignId, drivers);
 }
 
@@ -207,22 +313,25 @@ export async function fetchDriversByCampaignPeriod(campaignId, periodStart, peri
 export async function fetchDriverById(driverId) {
   const driver = await sync.readDriverById(driverId);
   if (!driver) return null;
-  return (await applyCurrentCampaignDetachments([driver]))[0] || null;
+  const withOverrides = await applyCampaignDriverOverrides([driver]);
+  return (await applyCurrentCampaignDetachments(withOverrides))[0] || null;
 }
 
 export async function findDriverByIdentity(identity) {
   const driver = await sync.readDriverByIdentity(identity);
   if (!driver) return null;
-  return (await applyCurrentCampaignDetachments([driver]))[0] || null;
+  const withOverrides = await applyCampaignDriverOverrides([driver]);
+  return (await applyCurrentCampaignDetachments(withOverrides))[0] || null;
 }
 
 export async function findDriverByPhone(phone) {
   const driver = await sync.readDriverByPhone(phone);
   if (!driver) return null;
-  return (await applyCurrentCampaignDetachments([driver]))[0] || null;
+  const withOverrides = await applyCampaignDriverOverrides([driver]);
+  return (await applyCurrentCampaignDetachments(withOverrides))[0] || null;
 }
 
-// ── Sync: dados vêm via script externo (POST /api/campaigns/sync-push) ──
+// ── Sync status: dados oficiais vêm do mirror direto em api_campaigns/api_drivers ──
 
 export async function getSyncStatus() {
   return sync.getSyncStatus();

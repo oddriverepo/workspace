@@ -47,6 +47,7 @@ import {
   fetchCampaignDriverStats,
   fetchCampaignById,
   fetchDrivers,
+  fetchDriverById,
   fetchDriversByCampaign,
   fetchDriversByCampaignPeriod,
   filterDetachedCampaignDrivers,
@@ -56,7 +57,11 @@ import {
   hasMongoData,
   ensureSyncIndexes,
 } from '../services/db.js';
-import { upsertCampaignSettings, getCampaignSettingsByIds } from '../services/mongo.js';
+import {
+  upsertCampaignSettings,
+  getCampaignSettingsByIds,
+  upsertCampaignDriverOverride,
+} from '../services/mongo.js';
 import buildMasterHeader from '../lib/masterHeader.js';
 import { applyCanonicalRaw, buildSheetRowValues, mergeDriverRawSources } from '../lib/driverSheet.js';
 import { applyDriverKmSummary, parseKmNumber } from '../lib/driverKm.js';
@@ -2018,9 +2023,29 @@ router.patch('/:id/drivers/:driverId', async (req, res) => {
   const campaign = db.campaigns.find(c => c.id === req.params.id) || await resolveCampaignFromApi(req.params.id);
   if (!campaign) return respondNotFound(res, 'Campanha não encontrada');
 
-  const driver = db.drivers.find(
+  const localDriver = db.drivers.find(
     d => d.id === req.params.driverId && d.campaignId === campaign.id,
   );
+  let driver = localDriver;
+  let mirroredDriver = false;
+
+  if (!driver) {
+    const apiDriver = await fetchDriverById(req.params.driverId);
+    if (
+      apiDriver &&
+      String(apiDriver.campaignId || '').trim() === String(campaign.id || '').trim()
+    ) {
+      mirroredDriver = true;
+      driver = {
+        ...apiDriver,
+        raw: apiDriver.raw && typeof apiDriver.raw === 'object' ? { ...apiDriver.raw } : {},
+        schedule: apiDriver.schedule && typeof apiDriver.schedule === 'object' ? { ...apiDriver.schedule } : null,
+        campaignData: apiDriver.campaignData && typeof apiDriver.campaignData === 'object'
+          ? { ...apiDriver.campaignData }
+          : apiDriver.campaignData,
+      };
+    }
+  }
   if (!driver) return respondNotFound(res, 'Motorista não encontrado');
 
   const fieldsInput = req.body?.fields && typeof req.body.fields === 'object'
@@ -2078,8 +2103,9 @@ router.patch('/:id/drivers/:driverId', async (req, res) => {
 
     applyCanonicalRaw(driver);
 
-    // If campaign has a linked sheet, update it
-    if (campaign.sheetId && campaign.sheetName && driver.rowNumber) {
+    // Legacy/local campaigns may still be linked to a sheet. Mirrored drivers must
+    // persist workspace edits only in the local Mongo override layer.
+    if (!mirroredDriver && campaign.sheetId && campaign.sheetName && driver.rowNumber) {
       let header = Array.isArray(campaign.sheetHeader) && campaign.sheetHeader.length
         ? campaign.sheetHeader
         : null;
@@ -2092,24 +2118,51 @@ router.patch('/:id/drivers/:driverId', async (req, res) => {
       await updateSheetRow(campaign.sheetId, campaign.sheetName, driver.rowNumber, rowValues);
     }
 
-    saveDB(db);
+    if (mirroredDriver) {
+      await upsertCampaignDriverOverride({
+        campaignId: campaign.id,
+        driverId: driver.id,
+        driverCampaignId: driver.campaignData?.driverCampaignId || driver.driverCampaignId || '',
+        campaignName: campaign.name,
+        driverName: driver.name,
+        fields: fieldsInput,
+        patch: {
+          name: driver.name,
+          nameKey: driver.nameKey,
+          city: driver.city,
+          pix: driver.pix,
+          status: driver.status,
+          statusRaw: driver.statusRaw,
+          schedule: Object.prototype.hasOwnProperty.call(driver, 'schedule') ? driver.schedule : null,
+        },
+        updatedBy: req.adminUser || req.admin || null,
+      });
+    } else {
+      saveDB(db);
 
-    try {
-      await upsertDriverRecord(driver);
-    } catch (err) {
-      console.warn('[campaigns] db upsert driver update', err?.message || err);
-    }
+      try {
+        await upsertDriverRecord(driver);
+      } catch (err) {
+        console.warn('[campaigns] db upsert driver update', err?.message || err);
+      }
 
-    try {
-      await upsertMasterRecord(campaign, driver);
-    } catch (err) {
-      console.warn('[campaigns] db upsert master driver update', err?.message || err);
+      try {
+        await upsertMasterRecord(campaign, driver);
+      } catch (err) {
+        console.warn('[campaigns] db upsert master driver update', err?.message || err);
+      }
     }
 
     await logAudit(req, 'driver:update', {
       entityType: 'driver',
       entityId: driver.id,
-      data: { campaignId: campaign.id, campaignName: campaign.name, driverName: driver.name, fields: Object.keys(fieldsInput) },
+      data: {
+        campaignId: campaign.id,
+        campaignName: campaign.name,
+        driverName: driver.name,
+        fields: Object.keys(fieldsInput),
+        source: mirroredDriver ? 'mirror_override' : 'local',
+      },
     });
 
     res.json({ driver });
