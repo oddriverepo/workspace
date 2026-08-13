@@ -219,6 +219,7 @@
 
   function getDriverDocumentsData(d) {
     const docs = pick(d, 'documentsData', 'documents', 'raw.documentsData');
+    if (docs?.items && typeof docs.items === 'object' && !Array.isArray(docs.items)) return docs.items;
     return docs && typeof docs === 'object' && !Array.isArray(docs) ? docs : {};
   }
 

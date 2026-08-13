@@ -436,7 +436,8 @@ function normalizeDriverDocumentStatus(value) {
 
 function getDriverDocumentsData(driver) {
   const docs = driver?.documentsData || driver?.documents || driver?.raw?.documentsData || null;
-  return docs && typeof docs === 'object' ? docs : {};
+  if (!docs || typeof docs !== 'object') return {};
+  return docs.items && typeof docs.items === 'object' ? docs.items : docs;
 }
 
 function getDriverDocumentSummary(driver) {

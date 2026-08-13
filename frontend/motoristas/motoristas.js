@@ -1400,7 +1400,8 @@
 
   function getDriverDocumentsData(driver) {
     var docs = driver && (driver.documentsData || driver.documents || (driver.raw && driver.raw.documentsData));
-    return docs && typeof docs === 'object' ? docs : {};
+    if (!docs || typeof docs !== 'object') return {};
+    return docs.items && typeof docs.items === 'object' ? docs.items : docs;
   }
 
   function getDriverDocumentSummary(driver) {
