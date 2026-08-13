@@ -786,7 +786,7 @@
   //  EXPORTAR DADOS — gera .xlsx com dados operacionais das campanhas
   // ══════════════════════════════════════════════════════════════════
 
-  async function exportarDadosExcel() {
+  async function exportarDadosExcelLegacy() {
     const btn = document.getElementById('btnExportarDados');
     if (btn) { btn.disabled = true; btn.textContent = 'Gerando…'; }
 
@@ -861,6 +861,205 @@
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = 'Exportar dados'; }
     }
+  }
+
+  async function exportarDadosExcel() {
+    const btn = document.getElementById('btnExportarDados');
+    if (btn) { btn.disabled = true; btn.textContent = 'Gerando...'; }
+
+    try {
+      await loadSheetJS();
+
+      const XLSX = window.XLSX;
+      const wb = XLSX.utils.book_new();
+      const date = new Date().toISOString().slice(0, 10);
+
+      if (campaignPanelState.mode === 'documents') {
+        await appendCampaignDocumentsExportSheet(XLSX, wb);
+        XLSX.writeFile(wb, `oddrive_documentos_motoristas_${date}.xlsx`);
+      } else {
+        await appendLowKmExportSheet(XLSX, wb);
+        XLSX.writeFile(wb, `oddrive_km_baixa_${date}.xlsx`);
+      }
+    } catch (err) {
+      console.error('[exportarDados]', err);
+      alert('Nao foi possivel gerar a planilha. Tente novamente.');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Exportar dados'; }
+    }
+  }
+
+  function firstDefined(...values) {
+    return values.find(value => value !== undefined && value !== null && value !== '');
+  }
+
+  function formatExportPercent(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '';
+    return `${Math.round(n)}%`;
+  }
+
+  function formatExportDateTime(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
+
+  function getExportCampaignFilterLabel(campaignId) {
+    if (!campaignId) return 'Todas as campanhas';
+    const items = extractItems(actionColumnsState.data['low-km']);
+    const found = items.find(item => asStringId(item.campaignId || item.campaign_id) === String(campaignId));
+    return found?.campaignName || found?.campaign_name || 'Campanha filtrada';
+  }
+
+  async function appendLowKmExportSheet(XLSX, wb) {
+    if (!actionColumnsState.data['low-km']) {
+      actionColumnsState.data['low-km'] = await fetchJSON('/api/overview/drivers-low-km?limit=500');
+    }
+
+    const selectedCampaignId = String(actionColumnsState.filterCampaignId['low-km'] || '');
+    const items = extractItems(actionColumnsState.data['low-km'])
+      .filter(item => !selectedCampaignId || asStringId(item.campaignId || item.campaign_id) === selectedCampaignId);
+
+    const rows = [
+      ['Relatorio', 'Analise de quilometragem baixa'],
+      ['Filtro de campanha', getExportCampaignFilterLabel(selectedCampaignId)],
+      ['Gerado em', formatExportDateTime(Date.now())],
+      [],
+      ['Motorista', 'Telefone', 'Campanha', 'Cidade', 'UF', 'Status', 'KM atual', 'KM minimo', '% da meta', 'Deficit KM'],
+      ...items.map(item => [
+        item.name || item.driverName || '',
+        item.phone || item.whatsapp || item.contactPhone || '',
+        item.campaignName || item.campaign_name || '',
+        item.city || '',
+        item.state || item.uf || '',
+        item.status || item.driverStatus || '',
+        firstDefined(item.km, item.kmTravelled, item.kmTravelledValue, ''),
+        firstDefined(item.kmMinimum, item.kmGoal, item.kmTarget, ''),
+        formatExportPercent(firstDefined(item.kmPct, item.percent, item.pct, item.progressPct, item.progress)),
+        firstDefined(item.kmDeficit, item.deficitKm, ''),
+      ]),
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [
+      { wch: 34 },
+      { wch: 18 },
+      { wch: 34 },
+      { wch: 20 },
+      { wch: 8 },
+      { wch: 16 },
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 12 },
+    ];
+    XLSX.utils.book_append_sheet(wb, ws, 'KM Baixa');
+  }
+
+  async function appendCampaignDocumentsExportSheet(XLSX, wb) {
+    const docsState = campaignPanelState.documents;
+    if (!docsState.campaigns.length || !docsState.drivers.length) {
+      const [campaignsData, driversData] = await Promise.all([
+        fetchJSON('/api/campaigns/summary'),
+        fetchJSON('/api/drivers'),
+      ]);
+      docsState.campaigns = extractItems(campaignsData).filter(isActiveCampaign);
+      docsState.drivers = extractItems(driversData);
+    }
+
+    const rowsByCampaign = buildCampaignDocumentsOverview();
+    const totals = rowsByCampaign.reduce((acc, row) => {
+      acc.total += row.total;
+      acc.noDocuments += row.noDocuments;
+      acc.pending += row.pending;
+      acc.complete += row.complete;
+      return acc;
+    }, { total: 0, noDocuments: 0, pending: 0, complete: 0 });
+
+    const documentHeaders = DRIVER_DOCUMENT_FIELDS.flatMap(field => [
+      `${field.label} - status`,
+      `${field.label} - enviado em`,
+      `${field.label} - link`,
+    ]);
+
+    const rows = [
+      ['Relatorio', 'Revisao de documentos dos motoristas'],
+      ['Campanhas ativas', rowsByCampaign.length],
+      ['Motoristas analisados', totals.total],
+      ['Pendentes', totals.pending],
+      ['Sem envio', totals.noDocuments],
+      ['Completos', totals.complete],
+      ['Gerado em', formatExportDateTime(Date.now())],
+      [],
+      [
+        'Campanha',
+        'Motorista',
+        'Telefone',
+        'Situacao geral',
+        'Enviados',
+        'Aprovados',
+        'Pendentes',
+        'Reprovados',
+        'Faltando',
+        ...documentHeaders,
+      ],
+    ];
+
+    rowsByCampaign.forEach(row => {
+      if (!row.drivers.length) {
+        rows.push([row.name, '', '', 'Sem motoristas vinculados', 0, 0, 0, 0, DRIVER_DOCUMENT_FIELDS.length]);
+        return;
+      }
+
+      row.drivers.forEach(({ driver, summary }) => {
+        const documentsData = getDriverDocumentsData(driver);
+        const documentValues = DRIVER_DOCUMENT_FIELDS.flatMap(field => {
+          const item = getDocumentItem(documentsData, field.key);
+          const sent = hasDriverDocumentItem(item);
+          return [
+            sent ? getDriverDocumentStatusLabel(item?.status) : 'Nao enviado',
+            formatExportDateTime(firstDefined(item?.createdAt, item?.created_at)),
+            getDriverDocumentLink(item),
+          ];
+        });
+
+        rows.push([
+          row.name,
+          driver.name || driver.driverName || '',
+          getDriverPhone(driver),
+          summary.label,
+          summary.sentCount,
+          summary.approvedCount,
+          summary.pendingCount,
+          summary.rejectedCount,
+          summary.missingCount,
+          ...documentValues,
+        ]);
+      });
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [
+      { wch: 36 },
+      { wch: 34 },
+      { wch: 18 },
+      { wch: 18 },
+      { wch: 10 },
+      { wch: 10 },
+      { wch: 10 },
+      { wch: 10 },
+      { wch: 10 },
+      ...DRIVER_DOCUMENT_FIELDS.flatMap(() => [{ wch: 18 }, { wch: 18 }, { wch: 52 }]),
+    ];
+    XLSX.utils.book_append_sheet(wb, ws, 'Documentos');
   }
 
   function loadSheetJS() {
