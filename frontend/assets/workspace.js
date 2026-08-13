@@ -630,7 +630,16 @@
             <span><strong>${campaignOverview.installedAvgPct}%</strong> instalação</span>
           </div>
 
-          <div class="campanhas-action-columns" id="campanhasColumns">
+          <div class="campaign-panel-switch" role="tablist" aria-label="Modo do painel de campanhas">
+            <button type="button" class="campaign-panel-switch-btn ${campaignPanelState.mode === 'km' ? 'is-active' : ''}" data-action="set-campaign-panel-mode" data-mode="km" aria-pressed="${campaignPanelState.mode === 'km' ? 'true' : 'false'}">
+              Análise de quilometragem
+            </button>
+            <button type="button" class="campaign-panel-switch-btn ${campaignPanelState.mode === 'documents' ? 'is-active' : ''}" data-action="set-campaign-panel-mode" data-mode="documents" aria-pressed="${campaignPanelState.mode === 'documents' ? 'true' : 'false'}">
+              Revisão de documentos
+            </button>
+          </div>
+
+          <div class="campanhas-action-columns ${campaignPanelState.mode === 'documents' ? 'is-documents-panel' : 'is-km-panel'}" id="campanhasColumns">
             ${renderActionColumnsSkeleton()}
           </div>
         </section>
@@ -1096,9 +1105,468 @@
     templates: null,
   };
 
+  const CAMPAIGN_PANEL_MODE_STORAGE_KEY = 'oddrive:overview:campaignPanelMode';
+  const DRIVER_DOCUMENT_FIELDS = [
+    { key: 'driverDocument', label: 'Documento de identidade' },
+    { key: 'driverLicense', label: 'CNH' },
+    { key: 'proofOfAddress', label: 'Comprovante de endereco' },
+    { key: 'vehicleRegistration', label: 'Documento do veiculo' },
+    { key: 'appRating', label: 'Avaliacao do app' },
+  ];
+  const DRIVER_DOCUMENT_STATUS_LABELS = {
+    approved: 'Aprovado',
+    pending: 'Pendente',
+    rejected: 'Reprovado',
+    refused: 'Reprovado',
+    review: 'Em analise',
+    reviewing: 'Em analise',
+    in_review: 'Em analise',
+    awaiting: 'Aguardando',
+    uploaded: 'Enviado',
+  };
+
+  const campaignPanelState = {
+    mode: localStorage.getItem(CAMPAIGN_PANEL_MODE_STORAGE_KEY) === 'documents' ? 'documents' : 'km',
+    documents: {
+      campaigns: [],
+      drivers: [],
+      selectedCampaignId: '',
+      loading: false,
+      error: false,
+    },
+  };
+
+  function getVisibleActionColumns() {
+    return ACTION_COLUMNS.filter(col => col.id === 'low-km');
+  }
+
+  function normalizeTextKey(value) {
+    return String(value ?? '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .toLowerCase();
+  }
+
+  function asStringId(value) {
+    if (!value) return '';
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number') return String(value);
+    if (value.$oid) return String(value.$oid);
+    if (value.oid) return String(value.oid);
+    if (value.id) return asStringId(value.id);
+    if (value._id) return asStringId(value._id);
+    return String(value);
+  }
+
+  function getCampaignId(campaign) {
+    return asStringId(campaign?.id || campaign?._id || campaign?.campaignId || campaign?.campaign_id);
+  }
+
+  function getCampaignName(campaign) {
+    return String(campaign?.name || campaign?.title || campaign?.campaignName || campaign?.campaign_name || 'Campanha sem nome').trim();
+  }
+
+  function getDriverId(driver) {
+    return asStringId(driver?.id || driver?._id || driver?.driverId || driver?.driver_id);
+  }
+
+  function getDriverCampaignId(driver) {
+    return asStringId(
+      driver?.campaignId ||
+      driver?.campaign_id ||
+      driver?.campaignData?.id ||
+      driver?.campaignData?._id ||
+      driver?.campaign?.id ||
+      driver?.campaign?._id
+    );
+  }
+
+  function getDriverCampaignName(driver) {
+    return String(
+      driver?.campaignData?.name ||
+      driver?.campaignData?.title ||
+      driver?.campaignName ||
+      driver?.campaign_name ||
+      driver?.campaign?.name ||
+      driver?.campaign?.title ||
+      'Sem campanha'
+    ).trim();
+  }
+
+  function getDriverDocumentsData(driver) {
+    return driver?.documentsData || driver?.documents || driver?.raw?.documentsData || driver?.raw?.documents || null;
+  }
+
+  function getDocumentItem(documentsData, key) {
+    if (!documentsData) return null;
+    const items = documentsData.items || documentsData;
+    return items?.[key] || null;
+  }
+
+  function getDriverDocumentLink(item) {
+    const link = String(item?.link || item?.url || item?.fileUrl || '').trim();
+    return /^https?:\/\//i.test(link) ? link : '';
+  }
+
+  function hasDriverDocumentItem(item) {
+    if (!item || typeof item !== 'object') return false;
+    if (item.sent === true) return true;
+    if (getDriverDocumentLink(item)) return true;
+    if (String(item.status || '').trim()) return true;
+    if (item.createdAt || item.created_at || item.sourceId || item._id) return true;
+    return false;
+  }
+
+  function normalizeDriverDocumentStatus(value) {
+    const key = normalizeTextKey(value).replace(/\s+/g, '_');
+    if (!key) return '';
+    if (key === 'in_review' || key === 'em_analise' || key === 'em_analise') return 'in_review';
+    if (key === 'approved' || key === 'aprovado' || key === 'aprovada') return 'approved';
+    if (key === 'rejected' || key === 'reprovado' || key === 'reprovada' || key === 'refused') return 'rejected';
+    if (key === 'pending' || key === 'pendente') return 'pending';
+    if (key === 'uploaded' || key === 'enviado' || key === 'enviada') return 'uploaded';
+    return key;
+  }
+
+  function getDriverDocumentStatusLabel(status) {
+    const key = normalizeDriverDocumentStatus(status);
+    return DRIVER_DOCUMENT_STATUS_LABELS[key] || (key ? String(status || key) : 'Nao enviado');
+  }
+
+  function getDriverDocumentStatusClass(status) {
+    const key = normalizeDriverDocumentStatus(status);
+    if (key === 'approved') return 'is-approved';
+    if (key === 'rejected') return 'is-rejected';
+    if (key === 'pending' || key === 'in_review' || key === 'reviewing' || key === 'uploaded') return 'is-pending';
+    return 'is-missing';
+  }
+
+  function getDriverDocumentSummary(driver) {
+    const docs = getDriverDocumentsData(driver);
+    let sent = 0;
+    let approved = 0;
+    let rejected = 0;
+    let pending = 0;
+
+    DRIVER_DOCUMENT_FIELDS.forEach(field => {
+      const item = getDocumentItem(docs, field.key);
+      if (!hasDriverDocumentItem(item)) return;
+      sent += 1;
+      const status = normalizeDriverDocumentStatus(item?.status);
+      if (status === 'approved') approved += 1;
+      else if (status === 'rejected') rejected += 1;
+      else pending += 1;
+    });
+
+    const total = DRIVER_DOCUMENT_FIELDS.length;
+    const missing = Math.max(0, total - sent);
+    const complete = sent === total && approved === total;
+    const none = sent === 0;
+    return {
+      total,
+      sent,
+      approved,
+      pending,
+      rejected,
+      missing,
+      complete,
+      none,
+      label: none ? 'Sem documentos' : complete ? 'Completo' : 'Pendente',
+      className: none ? 'is-empty' : complete ? 'is-complete' : 'is-pending',
+    };
+  }
+
+  function extractItems(response) {
+    if (Array.isArray(response)) return response;
+    if (Array.isArray(response?.items)) return response.items;
+    if (Array.isArray(response?.drivers)) return response.drivers;
+    if (Array.isArray(response?.campaigns)) return response.campaigns;
+    return [];
+  }
+
+  function isActiveCampaign(campaign) {
+    if (!campaign) return false;
+    if (campaign.status === true || campaign.active === true) return true;
+    const key = normalizeTextKey(
+      campaign.current_status ||
+      campaign.currentStatus ||
+      campaign.status ||
+      campaign.statusRaw ||
+      campaign.state
+    );
+    if (!key) return true;
+    return ['active', 'ativa', 'ativo', 'em_andamento', 'andamento'].includes(key);
+  }
+
+  function getDriverPhone(driver) {
+    return String(driver?.phone || driver?.whatsapp || driver?.contactPhone || '').trim();
+  }
+
+  function renderCampaignDocumentsSkeleton() {
+    return `
+      <section class="campaign-docs-panel">
+        <div class="campaign-docs-toolbar">
+          <div>
+            <strong>Revisao de documentos</strong>
+            <span>Carregando campanhas e motoristas...</span>
+          </div>
+        </div>
+        <div class="overview-notif-loading">
+          <div class="skeleton skeleton-line lg"></div>
+          <div class="skeleton skeleton-line lg"></div>
+          <div class="skeleton skeleton-line md"></div>
+        </div>
+      </section>
+    `;
+  }
+
+  async function loadCampaignDocumentsPanel() {
+    const root = document.getElementById('campanhasColumns');
+    if (!root) return;
+    campaignPanelState.documents.loading = true;
+    campaignPanelState.documents.error = false;
+    root.innerHTML = renderCampaignDocumentsSkeleton();
+
+    try {
+      const [campaignsResult, driversResult] = await Promise.allSettled([
+        fetchJSON('/api/campaigns/summary'),
+        fetchJSON('/api/drivers'),
+      ]);
+
+      if (campaignsResult.status === 'rejected') throw campaignsResult.reason;
+      if (driversResult.status === 'rejected') throw driversResult.reason;
+
+      campaignPanelState.documents.campaigns = extractItems(campaignsResult.value).filter(isActiveCampaign);
+      campaignPanelState.documents.drivers = extractItems(driversResult.value);
+      campaignPanelState.documents.loading = false;
+      campaignPanelState.documents.error = false;
+    } catch (err) {
+      console.warn('[Workspace] Falha ao carregar documentos do painel:', err?.message);
+      campaignPanelState.documents.loading = false;
+      campaignPanelState.documents.error = true;
+    }
+
+    renderActionColumns();
+    bindActionColumnEvents(root);
+  }
+
+  function buildCampaignDocumentsOverview() {
+    const campaigns = campaignPanelState.documents.campaigns || [];
+    const drivers = campaignPanelState.documents.drivers || [];
+    const campaignById = new Map();
+    const rowsByCampaign = new Map();
+
+    campaigns.forEach(campaign => {
+      const id = getCampaignId(campaign);
+      if (!id) return;
+      campaignById.set(id, campaign);
+      rowsByCampaign.set(id, []);
+    });
+
+    drivers.forEach(driver => {
+      const campaignId = getDriverCampaignId(driver);
+      if (!campaignId || !campaignById.has(campaignId)) return;
+      rowsByCampaign.get(campaignId).push({
+        driver,
+        summary: getDriverDocumentSummary(driver),
+      });
+    });
+
+    return campaigns.map(campaign => {
+      const id = getCampaignId(campaign);
+      const driversList = (rowsByCampaign.get(id) || []).sort((a, b) => {
+        const rank = item => item.summary.none ? 0 : item.summary.complete ? 2 : 1;
+        return rank(a) - rank(b) || String(a.driver?.name || '').localeCompare(String(b.driver?.name || ''), 'pt-BR');
+      });
+      const noDocuments = driversList.filter(item => item.summary.none).length;
+      const pending = driversList.filter(item => !item.summary.none && !item.summary.complete).length;
+      const complete = driversList.filter(item => item.summary.complete).length;
+      return {
+        id,
+        name: getCampaignName(campaign),
+        total: driversList.length,
+        noDocuments,
+        pending,
+        complete,
+        drivers: driversList,
+      };
+    }).sort((a, b) => {
+      const scoreA = a.noDocuments + a.pending;
+      const scoreB = b.noDocuments + b.pending;
+      return scoreB - scoreA || a.name.localeCompare(b.name, 'pt-BR');
+    });
+  }
+
+  function renderCampaignDocumentsPanel() {
+    const root = document.getElementById('campanhasColumns');
+    if (!root) return;
+
+    if (campaignPanelState.documents.error) {
+      root.innerHTML = `
+        <section class="campaign-docs-panel">
+          <div class="action-col-error">Falha ao carregar a revisao de documentos.</div>
+        </section>
+      `;
+      return;
+    }
+
+    const rows = buildCampaignDocumentsOverview();
+    const totals = rows.reduce((acc, row) => {
+      acc.total += row.total;
+      acc.pending += row.pending;
+      acc.noDocuments += row.noDocuments;
+      acc.complete += row.complete;
+      return acc;
+    }, { total: 0, pending: 0, noDocuments: 0, complete: 0 });
+
+    root.innerHTML = `
+      <section class="campaign-docs-panel">
+        <div class="campaign-docs-toolbar">
+          <div>
+            <strong>Revisao de documentos</strong>
+            <span>${rows.length} campanha(s) ativa(s) analisada(s)</span>
+          </div>
+          <div class="campaign-docs-totals" aria-label="Resumo geral dos documentos">
+            <span><b>${totals.pending}</b> pendentes</span>
+            <span><b>${totals.noDocuments}</b> sem envio</span>
+            <span><b>${totals.complete}</b> completos</span>
+          </div>
+        </div>
+        <div class="campaign-docs-list">
+          ${rows.length ? rows.map(renderCampaignDocumentRow).join('') : '<div class="action-col-empty">Nenhuma campanha ativa encontrada.</div>'}
+        </div>
+      </section>
+    `;
+  }
+
+  function renderCampaignDocumentRow(row) {
+    const selected = campaignPanelState.documents.selectedCampaignId === row.id;
+    const driverRows = selected
+      ? `<div class="campaign-docs-drivers">
+          ${row.drivers.length ? row.drivers.map(item => renderCampaignDocumentDriver(item)).join('') : '<div class="campaign-docs-empty">Nenhum motorista vinculado.</div>'}
+        </div>`
+      : '';
+
+    return `
+      <article class="campaign-doc-row ${selected ? 'is-open' : ''}">
+        <button type="button" class="campaign-doc-row-btn" data-action="toggle-campaign-docs" data-campaign-id="${escapeHTML(row.id)}" aria-expanded="${selected ? 'true' : 'false'}">
+          <span class="campaign-doc-row-name" title="${escapeHTML(row.name)}">${escapeHTML(row.name)}</span>
+          <span class="campaign-doc-pill is-pending"><b>${row.pending}</b> pendentes</span>
+          <span class="campaign-doc-pill is-empty"><b>${row.noDocuments}</b> sem envio</span>
+          <span class="campaign-doc-pill is-complete"><b>${row.complete}</b> completos</span>
+          <span class="campaign-doc-chevron">${selected ? '−' : '+'}</span>
+        </button>
+        ${driverRows}
+      </article>
+    `;
+  }
+
+  function renderCampaignDocumentDriver(item) {
+    const driver = item.driver || {};
+    const summary = item.summary || getDriverDocumentSummary(driver);
+    const id = getDriverId(driver);
+    return `
+      <button type="button" class="campaign-doc-driver ${summary.className}" data-action="open-driver-docs" data-driver-id="${escapeHTML(id)}">
+        <span>
+          <strong title="${escapeHTML(driver.name || '')}">${escapeHTML(driver.name || 'Sem nome')}</strong>
+          <small>${summary.sent}/${summary.total} enviados · ${summary.approved} aprovados</small>
+        </span>
+        <em>${escapeHTML(summary.label)}</em>
+      </button>
+    `;
+  }
+
+  function renderLowKmFocusedItem(col, item, selected) {
+    const id = item.driverId || item.contactId || '';
+    const checked = id && selected.has(id);
+    const initials = String(item.name || '?').trim().split(/\s+/).slice(0, 2).map(s => s[0] || '').join('').toUpperCase() || '?';
+    const ctx = item[col.contextField] || item.campaignName || '';
+    const metric = col.metric ? col.metric(item) : '';
+    const rawPct = Number(item.percent ?? item.pct ?? item.progressPct ?? item.progress ?? 0);
+    const pct = Number.isFinite(rawPct) ? Math.max(0, Math.min(100, rawPct)) : 0;
+    const checkboxHtml = col.enableBulk && id
+      ? `<input type="checkbox" class="action-col-check" data-col-pick="${col.id}" data-id="${escapeHTML(id)}" ${checked ? 'checked' : ''} />`
+      : '<span class="action-col-check-placeholder"></span>';
+
+    return `
+      <div class="action-col-item action-col-item--wide ${checked ? 'is-selected' : ''}" data-id="${escapeHTML(id)}">
+        ${checkboxHtml}
+        <div class="action-col-avatar"><span class="action-col-avatar-fallback">${escapeHTML(initials)}</span></div>
+        <div class="action-col-main">
+          <div class="action-col-wide-top">
+            <strong class="action-col-name" title="${escapeHTML(item.name || '')}">${escapeHTML(item.name || 'Sem nome')}</strong>
+            <span class="action-col-wide-percent">${Math.round(pct)}%</span>
+          </div>
+          <div class="action-col-subline">
+            <span class="action-col-ctx" title="${escapeHTML(ctx)}">${escapeHTML(ctx || 'Sem campanha')}</span>
+            <span class="action-col-metric">${metric}</span>
+          </div>
+          <div class="action-col-progress"><i style="width:${pct}%"></i></div>
+        </div>
+      </div>
+    `;
+  }
+
+  function openDriverDocumentsModal(driverId) {
+    const driver = (campaignPanelState.documents.drivers || []).find(item => getDriverId(item) === driverId);
+    if (!driver) return;
+    const docs = getDriverDocumentsData(driver);
+    const summary = getDriverDocumentSummary(driver);
+    const campaignName = getDriverCampaignName(driver);
+    const phone = getDriverPhone(driver);
+
+    document.getElementById('driverDocumentsModal')?.remove();
+    const backdrop = document.createElement('div');
+    backdrop.id = 'driverDocumentsModal';
+    backdrop.className = 'bulk-modal-backdrop';
+    backdrop.innerHTML = `
+      <div class="bulk-modal driver-documents-modal" role="dialog" aria-modal="true" aria-labelledby="driverDocsTitle">
+        <header class="bulk-modal-head">
+          <div>
+            <h3 id="driverDocsTitle">${escapeHTML(driver.name || 'Motorista')}</h3>
+            <p>${escapeHTML(campaignName)}${phone ? ` · ${escapeHTML(phone)}` : ''}</p>
+          </div>
+          <button type="button" class="bulk-modal-close" data-driver-docs-close aria-label="Fechar">×</button>
+        </header>
+        <div class="driver-documents-summary ${summary.className}">
+          <strong>${escapeHTML(summary.label)}</strong>
+          <span>${summary.sent}/${summary.total} enviados · ${summary.approved} aprovados · ${summary.missing} faltando</span>
+        </div>
+        <div class="driver-documents-grid">
+          ${DRIVER_DOCUMENT_FIELDS.map(field => {
+            const item = getDocumentItem(docs, field.key);
+            const sent = hasDriverDocumentItem(item);
+            const statusLabel = sent ? getDriverDocumentStatusLabel(item?.status) : 'Nao enviado';
+            const statusClass = getDriverDocumentStatusClass(item?.status);
+            const link = getDriverDocumentLink(item);
+            return `
+              <article class="driver-document-card ${sent ? '' : 'is-missing'}">
+                <header>
+                  <strong>${escapeHTML(field.label)}</strong>
+                  <span class="${statusClass}">${escapeHTML(statusLabel)}</span>
+                </header>
+                <p>${item?.createdAt || item?.created_at ? `Enviado em ${escapeHTML(formatDate(item.createdAt || item.created_at))}` : 'Sem data de envio'}</p>
+                ${link ? `<a href="${escapeHTML(link)}" target="_blank" rel="noopener noreferrer">Abrir imagem</a>` : '<em>Sem link disponivel</em>'}
+              </article>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+    document.body.appendChild(backdrop);
+    const close = () => backdrop.remove();
+    backdrop.querySelectorAll('[data-driver-docs-close]').forEach(btn => btn.addEventListener('click', close));
+    backdrop.addEventListener('click', ev => { if (ev.target === backdrop) close(); });
+  }
+
   function renderActionColumnsSkeleton() {
-    return ACTION_COLUMNS.map(col => `
-      <article class="action-column" data-col="${col.id}">
+    if (campaignPanelState.mode === 'documents') {
+      return renderCampaignDocumentsSkeleton();
+    }
+
+    return getVisibleActionColumns().map(col => `
+      <article class="action-column action-column--wide" data-col="${col.id}">
         <header class="action-col-header">
           <span class="action-col-icon tone-${col.tone}">${col.icon}</span>
           <div class="action-col-titles">
@@ -1125,11 +1593,17 @@
     const root = document.getElementById('campanhasColumns');
     if (!root) return;
 
+    if (campaignPanelState.mode === 'documents') {
+      await loadCampaignDocumentsPanel();
+      return;
+    }
+
+    const columns = getVisibleActionColumns();
     const results = await Promise.allSettled(
-      ACTION_COLUMNS.map(c => fetchJSON(c.endpoint))
+      columns.map(c => fetchJSON(c.endpoint))
     );
 
-    ACTION_COLUMNS.forEach((col, idx) => {
+    columns.forEach((col, idx) => {
       const r = results[idx];
       if (r.status === 'fulfilled') {
         actionColumnsState.data[col.id] = r.value;
@@ -1198,7 +1672,15 @@
     const root = document.getElementById('campanhasColumns');
     if (!root) return;
 
-    root.innerHTML = ACTION_COLUMNS.map(col => renderActionColumn(col)).join('');
+    root.classList.toggle('is-documents-panel', campaignPanelState.mode === 'documents');
+    root.classList.toggle('is-km-panel', campaignPanelState.mode !== 'documents');
+
+    if (campaignPanelState.mode === 'documents') {
+      renderCampaignDocumentsPanel();
+      return;
+    }
+
+    root.innerHTML = getVisibleActionColumns().map(col => renderActionColumn(col)).join('');
   }
 
   function renderActionColumn(col) {
@@ -1221,8 +1703,11 @@
 
     const errorBanner = data.error ? `<div class="action-col-error">Falha ao carregar.</div>` : '';
 
+    const isWideLowKm = col.id === 'low-km' && campaignPanelState.mode === 'km';
+    const listLimit = isWideLowKm ? 120 : 50;
+
     const listHtml = visible.length
-      ? visible.slice(0, 50).map(it => renderActionColumnItem(col, it, selected)).join('')
+      ? visible.slice(0, listLimit).map(it => renderActionColumnItem(col, it, selected)).join('')
       : `<div class="action-col-empty">${data.error ? 'Sem dados disponíveis.' : 'Nada por aqui — tudo em ordem.'}</div>`;
 
     const selectedCount = [...selected].filter(id => visible.some(it => (it.driverId || it.contactId) === id)).length;
@@ -1244,7 +1729,7 @@
       : '';
 
     return `
-      <article class="action-column" data-col="${col.id}">
+      <article class="action-column ${isWideLowKm ? 'action-column--wide' : ''}" data-col="${col.id}">
         <header class="action-col-header">
           <span class="action-col-icon tone-${col.tone}">${col.icon}</span>
           <div class="action-col-titles">
@@ -1262,6 +1747,10 @@
   }
 
   function renderActionColumnItem(col, item, selected) {
+    if (col.id === 'low-km' && campaignPanelState.mode === 'km') {
+      return renderLowKmFocusedItem(col, item, selected);
+    }
+
     const id = item.driverId || item.contactId || '';
     const checked = id && selected.has(id);
     const initials = String(item.name || '?').trim().split(/\s+/).slice(0, 2).map(s => s[0] || '').join('').toUpperCase() || '?';
@@ -1314,8 +1803,9 @@
           ? (data.items || []).filter(it => it.campaignId === filterCampaignId)
           : (data.items || []);
         const set = actionColumnsState.selected[checkAllCol];
+        const limit = checkAllCol === 'low-km' && campaignPanelState.mode === 'km' ? 120 : 50;
         if (target.checked) {
-          visible.slice(0, 50).forEach(it => {
+          visible.slice(0, limit).forEach(it => {
             const id = it.driverId || it.contactId;
             if (id) set.add(id);
           });
@@ -1340,6 +1830,23 @@
     root.addEventListener('click', (ev) => {
       const target = ev.target;
       if (!(target instanceof HTMLElement)) return;
+
+      const docsToggle = target.closest('[data-action="toggle-campaign-docs"]');
+      if (docsToggle) {
+        ev.preventDefault();
+        const campaignId = docsToggle.getAttribute('data-campaign-id') || '';
+        campaignPanelState.documents.selectedCampaignId =
+          campaignPanelState.documents.selectedCampaignId === campaignId ? '' : campaignId;
+        renderActionColumns();
+        return;
+      }
+
+      const driverDocs = target.closest('[data-action="open-driver-docs"]');
+      if (driverDocs) {
+        ev.preventDefault();
+        openDriverDocumentsModal(driverDocs.getAttribute('data-driver-id') || '');
+        return;
+      }
 
       const bulkCol = target.closest('[data-col-bulk]')?.getAttribute('data-col-bulk');
       if (bulkCol) {
@@ -1617,6 +2124,27 @@
 
       if (action === 'open-campaigns') {
         loadModule('/campanhas/index.html');
+        return;
+      }
+
+      if (action === 'set-campaign-panel-mode') {
+        const mode = button.dataset.mode === 'documents' ? 'documents' : 'km';
+        if (campaignPanelState.mode === mode) return;
+        campaignPanelState.mode = mode;
+        localStorage.setItem(CAMPAIGN_PANEL_MODE_STORAGE_KEY, mode);
+        overviewEl.querySelectorAll('.campaign-panel-switch-btn').forEach(btn => {
+          const isActive = btn.dataset.mode === mode;
+          btn.classList.toggle('is-active', isActive);
+          btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        });
+        const root = document.getElementById('campanhasColumns');
+        if (root) {
+          root.classList.toggle('is-documents-panel', mode === 'documents');
+          root.classList.toggle('is-km-panel', mode !== 'documents');
+          root.innerHTML = renderActionColumnsSkeleton();
+        }
+        loadCampanhasActionColumns();
+        syncTargetsPanelHeight();
         return;
       }
 
