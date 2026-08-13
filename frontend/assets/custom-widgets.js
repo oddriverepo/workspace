@@ -223,13 +223,19 @@
     return docs && typeof docs === 'object' && !Array.isArray(docs) ? docs : {};
   }
 
+  function hasDriverDocumentLink(item) {
+    const link = String(item?.link || item?.url || '').trim();
+    return /^https?:\/\//i.test(link);
+  }
+
   function getDriverDocumentItemStatus(item) {
     if (!item || typeof item !== 'object') return 'missing';
     const status = normalizeToken(item.status || '');
     if (status === 'approved' || status === 'aprovado') return 'approved';
     if (['rejected', 'reprovado', 'refused', 'denied', 'recusado'].includes(status)) return 'rejected';
     if (['pending', 'processing', 'analyzing', 'analysis', 'em analise', 'em análise'].includes(status)) return 'pending';
-    return (item.link || item.url || item.createdAt || item.created_at) ? 'pending' : 'missing';
+    if (status === 'review' || status === 'in review' || status === 'in_review') return 'pending';
+    return (item.sent === true || status || hasDriverDocumentLink(item) || item.createdAt || item.created_at) ? 'pending' : 'missing';
   }
 
   function getDriverDocumentSummary(d) {

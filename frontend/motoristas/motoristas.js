@@ -1404,6 +1404,21 @@
     return docs.items && typeof docs.items === 'object' ? docs.items : docs;
   }
 
+  function hasDriverDocumentItem(item) {
+    return Boolean(item && typeof item === 'object' && (
+      item.sent === true ||
+      getDriverDocumentLink(item) ||
+      item.status ||
+      item.createdAt ||
+      item.created_at
+    ));
+  }
+
+  function getDriverDocumentLink(item) {
+    var link = String((item && (item.link || item.url)) || '').trim();
+    return /^https?:\/\//i.test(link) ? link : '';
+  }
+
   function getDriverDocumentSummary(driver) {
     var docs = getDriverDocumentsData(driver);
     var sent = 0;
@@ -1411,8 +1426,8 @@
 
     DRIVER_DOCUMENT_FIELDS.forEach(function (field) {
       var item = docs[field.key];
-      if (!item || typeof item !== 'object') return;
-      if (item.link || item.status || item.createdAt || item.created_at) sent += 1;
+      if (!hasDriverDocumentItem(item)) return;
+      sent += 1;
       if (normalizeDriverDocumentStatus(item.status) === 'approved') approved += 1;
     });
 
@@ -1429,8 +1444,8 @@
     var summary = getDriverDocumentSummary(driver);
 
     var cards = DRIVER_DOCUMENT_FIELDS.map(function (field) {
-      var item = docs[field.key] && typeof docs[field.key] === 'object' ? docs[field.key] : null;
-      var link = item && item.link ? String(item.link) : '';
+      var item = hasDriverDocumentItem(docs[field.key]) ? docs[field.key] : null;
+      var link = getDriverDocumentLink(item);
       var statusKey = normalizeDriverDocumentStatus(item && item.status);
       var statusLabel = item
         ? (DRIVER_DOCUMENT_STATUS_LABELS[statusKey] || item.status || 'Enviado')

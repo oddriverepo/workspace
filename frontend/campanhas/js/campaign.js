@@ -440,6 +440,21 @@ function getDriverDocumentsData(driver) {
   return docs.items && typeof docs.items === 'object' ? docs.items : docs;
 }
 
+function hasDriverDocumentItem(item) {
+  return Boolean(item && typeof item === 'object' && (
+    item.sent === true ||
+    getDriverDocumentLink(item) ||
+    item.status ||
+    item.createdAt ||
+    item.created_at
+  ));
+}
+
+function getDriverDocumentLink(item) {
+  const link = String(item?.link || item?.url || '').trim();
+  return /^https?:\/\//i.test(link) ? link : '';
+}
+
 function getDriverDocumentSummary(driver) {
   const docs = getDriverDocumentsData(driver);
   let sent = 0;
@@ -447,8 +462,8 @@ function getDriverDocumentSummary(driver) {
 
   for (const field of DRIVER_DOCUMENT_FIELDS) {
     const item = docs[field.key];
-    if (!item || typeof item !== 'object') continue;
-    if (item.link || item.status || item.createdAt || item.created_at) sent += 1;
+    if (!hasDriverDocumentItem(item)) continue;
+    sent += 1;
     if (normalizeDriverDocumentStatus(item.status) === 'approved') approved += 1;
   }
 
@@ -484,8 +499,8 @@ function renderDriverDocumentsSection(driver) {
   grid.className = 'dd-documents-grid';
 
   for (const field of DRIVER_DOCUMENT_FIELDS) {
-    const item = docs[field.key] && typeof docs[field.key] === 'object' ? docs[field.key] : null;
-    const link = item?.link || '';
+    const item = hasDriverDocumentItem(docs[field.key]) ? docs[field.key] : null;
+    const link = getDriverDocumentLink(item);
     const statusKey = normalizeDriverDocumentStatus(item?.status);
     const statusLabel = item
       ? (DRIVER_DOCUMENT_STATUS_LABELS[statusKey] || item.status || 'Enviado')
