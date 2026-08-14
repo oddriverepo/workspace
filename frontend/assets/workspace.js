@@ -1714,9 +1714,6 @@
     const summary = getDriverDocumentSummary(driver);
     const campaignName = getDriverCampaignName(driver);
     const phone = getDriverPhone(driver);
-    const firstPreview = DRIVER_DOCUMENT_FIELDS
-      .map(field => ({ field, item: getDocumentItem(docs, field.key) }))
-      .find(({ item }) => getDriverDocumentLink(item));
 
     document.getElementById('driverDocumentsModal')?.remove();
     const backdrop = document.createElement('div');
@@ -1758,7 +1755,7 @@
             </div>
           </div>
           <aside class="driver-document-preview" aria-live="polite">
-            ${firstPreview ? renderDriverDocumentPreview(firstPreview.field.label, getDriverDocumentLink(firstPreview.item)) : renderDriverDocumentPreviewEmpty()}
+            ${renderDriverDocumentPreviewEmpty()}
           </aside>
         </div>
       </div>

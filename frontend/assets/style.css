@@ -3276,6 +3276,11 @@ footer::before {
   overflow: hidden;
 }
 
+.bulk-modal.driver-documents-modal {
+  width: min(1040px, calc(100vw - 32px));
+  overflow: auto;
+}
+
 .bulk-modal-head {
   display: flex;
   align-items: center;
