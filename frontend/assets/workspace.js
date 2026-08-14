@@ -763,23 +763,14 @@
     });
   }
 
-  // Sincroniza altura do painel "Metas de motoristas" com o painel "Campanhas"
+  // Mantém os painéis com altura natural. O painel de campanhas pode expandir
+  // e recolher conteúdos sem prender a altura do painel de metas.
   let targetsPanelObserver = null;
   function syncTargetsPanelHeight() {
-    const src = document.getElementById('campanhasPanel');
     const dst = document.getElementById('targetsPanel');
-    if (!src || !dst) return;
-    const apply = () => {
-      dst.style.height = src.offsetHeight + 'px';
-    };
-    apply();
     if (targetsPanelObserver) targetsPanelObserver.disconnect();
-    if (typeof ResizeObserver !== 'undefined') {
-      targetsPanelObserver = new ResizeObserver(apply);
-      targetsPanelObserver.observe(src);
-    } else {
-      window.addEventListener('resize', apply);
-    }
+    targetsPanelObserver = null;
+    if (dst) dst.style.height = '';
   }
 
   // ══════════════════════════════════════════════════════════════════
