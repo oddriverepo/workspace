@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tabela de Gráficas</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="suppliers-page">
+    <header class="suppliers-header">
+      <div>
+        <div class="eyebrow">Cadastro operacional</div>
+        <h1>Tabela de Gráficas</h1>
+        <p id="suppliersStatus">Sincronizando com a planilha...</p>
+      </div>
+      <div class="suppliers-actions">
+        <button type="button" class="ghost-button" id="metricsToggle">Métricas</button>
+        <button type="button" class="ghost-button" id="refreshSuppliers">Atualizar</button>
+        <button type="button" class="primary-button" id="newSupplier">Nova gráfica</button>
+      </div>
+    </header>
+
+    <section class="metrics-panel is-hidden" id="metricsPanel" aria-live="polite">
+      <div class="metric-card">
+        <span>Total de gráficas</span>
+        <strong id="metricTotal">0</strong>
+      </div>
+      <div class="metric-card">
+        <span>Praças atendidas</span>
+        <strong id="metricCities">0</strong>
+      </div>
+      <div class="metric-card">
+        <span>Ativadas</span>
+        <strong id="metricActive">0</strong>
+      </div>
+      <div class="metric-card">
+        <span>Não ativadas</span>
+        <strong id="metricInactive">0</strong>
+      </div>
+      <div class="metric-card metric-wide">
+        <span>Classificações</span>
+        <strong id="metricClassifications">-</strong>
+      </div>
+    </section>
+
+    <section class="sheet-card">
+      <div class="tabs-row">
+        <button type="button" class="tab-button is-active" data-tab="suppliers">
+          Gráficas <span id="suppliersCount">0</span>
+        </button>
+        <button type="button" class="tab-button" data-tab="saleValues">
+          Valores venda <span id="saleValuesCount">0</span>
+        </button>
+      </div>
+
+      <div class="filters-row" id="filtersRow">
+        <label>
+          Busca
+          <input type="search" id="searchInput" placeholder="Nome, praça, estado, contato, telefone...">
+        </label>
+        <label>
+          Praça
+          <select id="cityFilter"></select>
+        </label>
+        <label>
+          Estado
+          <select id="stateFilter"></select>
+        </label>
+        <label>
+          Status
+          <select id="activeFilter">
+            <option value="">Todos</option>
+            <option value="active">Ativadas</option>
+            <option value="inactive">Não ativadas</option>
+          </select>
+        </label>
+        <label>
+          Classificação
+          <select id="classificationFilter"></select>
+        </label>
+        <label>
+          Serviço
+          <select id="serviceFilter"></select>
+        </label>
+        <label>
+          Contato
+          <select id="contactFilter">
+            <option value="">Todos</option>
+            <option value="with_contact">Com telefone/celular</option>
+            <option value="missing_contact">Sem telefone/celular</option>
+            <option value="with_email">Com e-mail</option>
+            <option value="missing_email">Sem e-mail</option>
+          </select>
+        </label>
+        <button type="button" class="clear-filters" id="clearFilters">Limpar filtros</button>
+      </div>
+
+      <div class="table-meta">
+        <span id="tableSummary">0 registros</span>
+        <span id="lastUpdate">-</span>
+      </div>
+
+      <div class="table-wrap">
+        <table id="suppliersTable">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="empty-state is-hidden" id="emptyState">
+        <strong>Nenhum registro encontrado</strong>
+        <span>Ajuste os filtros ou atualize a integração com a planilha.</span>
+      </div>
+    </section>
+  </main>
+
+  <div class="modal-backdrop is-hidden" id="supplierModal">
+    <form class="supplier-modal" id="supplierForm">
+      <div class="modal-header">
+        <div>
+          <h2>Nova gráfica</h2>
+          <p>Adiciona uma nova linha na planilha conectada.</p>
+        </div>
+        <button type="button" class="icon-button" id="closeSupplierModal" aria-label="Fechar">×</button>
+      </div>
+      <div class="modal-grid">
+        <label>
+          Fornecedor
+          <input name="fornecedor" required>
+        </label>
+        <label>
+          Praça
+          <input name="praca">
+        </label>
+        <label>
+          Estado
+          <input name="estado" maxlength="2">
+        </label>
+        <label>
+          Ativado
+          <select name="ativado">
+            <option value="Sim">Sim</option>
+            <option value="Não">Não</option>
+          </select>
+        </label>
+        <label>
+          Classificação
+          <input name="classificacao">
+        </label>
+        <label>
+          Contato
+          <input name="contato">
+        </label>
+        <label>
+          E-mail
+          <input name="email" type="email">
+        </label>
+        <label>
+          Telefone
+          <input name="telefone">
+        </label>
+        <label class="full-line">
+          Endereço
+          <input name="endereco">
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="ghost-button" id="cancelSupplier">Cancelar</button>
+        <button type="submit" class="primary-button">Criar gráfica</button>
+      </div>
+    </form>
+  </div>
+
+  <script type="module" src="./tabela-graficas.js"></script>
+</body>
+</html>

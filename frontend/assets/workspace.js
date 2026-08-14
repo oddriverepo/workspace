@@ -2580,6 +2580,9 @@
         case 'crm':
           loadModule('/crm/index.html', 'crm');
           break;
+        case 'tabela-graficas':
+          loadModule('/tabela-graficas/index.html', 'tabela-graficas');
+          break;
         case 'meta-ads':
           loadModule('/meta-ads/index.html', 'meta-ads');
           break;

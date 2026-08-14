@@ -38,6 +38,7 @@ import overviewActionsRouter from './routes/overview-actions.js';
 import partnerLeadsRouter    from './routes/partner-leads.js';
 import driverScoreRouter     from './routes/driver-score.js';
 import crmRouter             from './routes/crm.js';
+import suppliersRouter       from './routes/suppliers.js';
 import metaAdsRouter         from './routes/meta-ads.js';
 
 // ── Rotas do Gerador de Orçamentos (convertidas para ESM) ──
@@ -392,6 +393,7 @@ app.use('/api/overview',       overviewActionsRouter);
 app.use('/api/partner-leads',  partnerLeadsRouter);
 app.use('/api/driver-scores',  driverScoreRouter);
 app.use('/api/crm',            crmRouter);
+app.use('/api/suppliers',      suppliersRouter);
 app.use('/api/meta-ads',       metaAdsRouter);
 
 // ── MCP (Model Context Protocol) — agente externo (GPT Maker) ──
