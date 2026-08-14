@@ -177,8 +177,8 @@ async function loadData(force = false) {
 
   try {
     const data = await apiFetch(`/api/suppliers/data${force ? '?force=1' : ''}`);
-    state.suppliers = normalizeRows(data.suppliers || data.data?.suppliers || []);
-    state.saleValues = normalizeRows(data.saleValues || data.data?.saleValues || []);
+    state.suppliers = normalizeRows(extractApiRows(data, ['suppliers', 'graficas', 'fornecedores']));
+    state.saleValues = normalizeRows(extractApiRows(data, ['saleValues', 'values', 'valoresVenda']));
     els.status.textContent = `Sincronizado às ${formatTime(new Date())}`;
     populateFilters();
     render();
@@ -230,6 +230,28 @@ async function apiFetch(path, options = {}) {
   }
 
   return payload || {};
+}
+
+function extractApiRows(payload, keys = []) {
+  const candidates = [];
+
+  for (const key of keys) {
+    candidates.push(
+      payload?.[key],
+      payload?.[key]?.items,
+      payload?.data?.[key],
+      payload?.data?.[key]?.items,
+    );
+  }
+
+  candidates.push(
+    payload?.items,
+    payload?.data?.items,
+    payload?.rows,
+    payload?.data?.rows,
+  );
+
+  return candidates.find(Array.isArray) || [];
 }
 
 function normalizeRows(rows) {
