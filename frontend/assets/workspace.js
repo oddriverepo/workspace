@@ -929,7 +929,7 @@
       .filter(item => !selectedCampaignId || asStringId(item.campaignId || item.campaign_id) === selectedCampaignId);
 
     const rows = [
-      ['Relatorio', 'Analise de quilometragem baixa'],
+      ['Relatório', 'Análise de quilometragem baixa'],
       ['Filtro de campanha', getExportCampaignFilterLabel(selectedCampaignId)],
       ['Gerado em', formatExportDateTime(Date.now())],
       [],
@@ -991,7 +991,7 @@
     ]);
 
     const rows = [
-      ['Relatorio', 'Revisao de documentos dos motoristas'],
+      ['Relatório', 'Revisão de documentos dos motoristas'],
       ['Campanhas ativas', rowsByCampaign.length],
       ['Motoristas analisados', totals.total],
       ['Pendentes', totals.pending],
@@ -1025,7 +1025,7 @@
           const item = getDocumentItem(documentsData, field.key);
           const sent = hasDriverDocumentItem(item);
           return [
-            sent ? getDriverDocumentStatusLabel(item?.status) : 'Nao enviado',
+            sent ? getDriverDocumentStatusLabel(item?.status) : 'Não enviado',
             formatExportDateTime(firstDefined(item?.createdAt, item?.created_at)),
             getDriverDocumentLink(item),
           ];
@@ -1036,11 +1036,11 @@
           driver.name || driver.driverName || '',
           getDriverPhone(driver),
           summary.label,
-          summary.sentCount,
-          summary.approvedCount,
-          summary.pendingCount,
-          summary.rejectedCount,
-          summary.missingCount,
+          summary.sent,
+          summary.approved,
+          summary.pending,
+          summary.rejected,
+          summary.missing,
           ...documentValues,
         ]);
       });
@@ -1308,18 +1308,18 @@
   const DRIVER_DOCUMENT_FIELDS = [
     { key: 'driverDocument', label: 'Documento de identidade' },
     { key: 'driverLicense', label: 'CNH' },
-    { key: 'proofOfAddress', label: 'Comprovante de endereco' },
-    { key: 'vehicleRegistration', label: 'Documento do veiculo' },
-    { key: 'appRating', label: 'Avaliacao do app' },
+    { key: 'proofOfAddress', label: 'Comprovante de endereço' },
+    { key: 'vehicleRegistration', label: 'Documento do veículo' },
+    { key: 'appRating', label: 'Avaliação do app' },
   ];
   const DRIVER_DOCUMENT_STATUS_LABELS = {
     approved: 'Aprovado',
     pending: 'Pendente',
     rejected: 'Reprovado',
     refused: 'Reprovado',
-    review: 'Em analise',
-    reviewing: 'Em analise',
-    in_review: 'Em analise',
+    review: 'Em análise',
+    reviewing: 'Em análise',
+    in_review: 'Em análise',
     awaiting: 'Aguardando',
     uploaded: 'Enviado',
   };
@@ -1430,7 +1430,7 @@
 
   function getDriverDocumentStatusLabel(status) {
     const key = normalizeDriverDocumentStatus(status);
-    return DRIVER_DOCUMENT_STATUS_LABELS[key] || (key ? String(status || key) : 'Nao enviado');
+    return DRIVER_DOCUMENT_STATUS_LABELS[key] || (key ? String(status || key) : 'Não enviado');
   }
 
   function getDriverDocumentStatusClass(status) {
@@ -1507,7 +1507,7 @@
       <section class="campaign-docs-panel">
         <div class="campaign-docs-toolbar">
           <div>
-            <strong>Revisao de documentos</strong>
+            <strong>Revisão de documentos</strong>
             <span>Carregando campanhas e motoristas...</span>
           </div>
         </div>
@@ -1604,7 +1604,7 @@
     if (campaignPanelState.documents.error) {
       root.innerHTML = `
         <section class="campaign-docs-panel">
-          <div class="action-col-error">Falha ao carregar a revisao de documentos.</div>
+          <div class="action-col-error">Falha ao carregar a revisão de documentos.</div>
         </section>
       `;
       return;
@@ -1623,7 +1623,7 @@
       <section class="campaign-docs-panel">
         <div class="campaign-docs-toolbar">
           <div>
-            <strong>Revisao de documentos</strong>
+            <strong>Revisão de documentos</strong>
             <span>${rows.length} campanha(s) ativa(s) analisada(s)</span>
           </div>
           <div class="campaign-docs-totals" aria-label="Resumo geral dos documentos">
@@ -1714,6 +1714,9 @@
     const summary = getDriverDocumentSummary(driver);
     const campaignName = getDriverCampaignName(driver);
     const phone = getDriverPhone(driver);
+    const firstPreview = DRIVER_DOCUMENT_FIELDS
+      .map(field => ({ field, item: getDocumentItem(docs, field.key) }))
+      .find(({ item }) => getDriverDocumentLink(item));
 
     document.getElementById('driverDocumentsModal')?.remove();
     const backdrop = document.createElement('div');
@@ -1732,11 +1735,13 @@
           <strong>${escapeHTML(summary.label)}</strong>
           <span>${summary.sent}/${summary.total} enviados · ${summary.approved} aprovados · ${summary.missing} faltando</span>
         </div>
-        <div class="driver-documents-grid">
+        <div class="driver-documents-body">
+          <div class="driver-documents-list-pane">
+            <div class="driver-documents-grid">
           ${DRIVER_DOCUMENT_FIELDS.map(field => {
             const item = getDocumentItem(docs, field.key);
             const sent = hasDriverDocumentItem(item);
-            const statusLabel = sent ? getDriverDocumentStatusLabel(item?.status) : 'Nao enviado';
+            const statusLabel = sent ? getDriverDocumentStatusLabel(item?.status) : 'Não enviado';
             const statusClass = getDriverDocumentStatusClass(item?.status);
             const link = getDriverDocumentLink(item);
             return `
@@ -1746,17 +1751,55 @@
                   <span class="${statusClass}">${escapeHTML(statusLabel)}</span>
                 </header>
                 <p>${item?.createdAt || item?.created_at ? `Enviado em ${escapeHTML(formatDate(item.createdAt || item.created_at))}` : 'Sem data de envio'}</p>
-                ${link ? `<a href="${escapeHTML(link)}" target="_blank" rel="noopener noreferrer">Abrir imagem</a>` : '<em>Sem link disponivel</em>'}
+                ${link ? `<button type="button" class="driver-document-preview-btn" data-doc-preview-url="${escapeHTML(link)}" data-doc-preview-title="${escapeHTML(field.label)}">Abrir imagem</button>` : '<em>Sem link disponível</em>'}
               </article>
             `;
           }).join('')}
+            </div>
+          </div>
+          <aside class="driver-document-preview" aria-live="polite">
+            ${firstPreview ? renderDriverDocumentPreview(firstPreview.field.label, getDriverDocumentLink(firstPreview.item)) : renderDriverDocumentPreviewEmpty()}
+          </aside>
         </div>
       </div>
     `;
     document.body.appendChild(backdrop);
     const close = () => backdrop.remove();
     backdrop.querySelectorAll('[data-driver-docs-close]').forEach(btn => btn.addEventListener('click', close));
+    backdrop.querySelectorAll('[data-doc-preview-url]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const url = btn.getAttribute('data-doc-preview-url') || '';
+        const title = btn.getAttribute('data-doc-preview-title') || 'Documento';
+        const preview = backdrop.querySelector('.driver-document-preview');
+        if (!preview || !url) return;
+        preview.innerHTML = renderDriverDocumentPreview(title, url);
+      });
+    });
     backdrop.addEventListener('click', ev => { if (ev.target === backdrop) close(); });
+  }
+
+  function renderDriverDocumentPreviewEmpty() {
+    return `
+      <div class="driver-document-preview-empty">
+        <strong>Pré-visualização</strong>
+        <span>Selecione um documento com imagem para visualizar aqui.</span>
+      </div>
+    `;
+  }
+
+  function renderDriverDocumentPreview(title, url) {
+    const safeTitle = escapeHTML(title || 'Documento');
+    const safeUrl = escapeHTML(url || '');
+    if (!safeUrl) return renderDriverDocumentPreviewEmpty();
+    return `
+      <div class="driver-document-preview-head">
+        <strong>${safeTitle}</strong>
+        <a href="${safeUrl}" target="_blank" rel="noopener noreferrer">Abrir em nova aba</a>
+      </div>
+      <div class="driver-document-preview-frame">
+        <img src="${safeUrl}" alt="Prévia de ${safeTitle}" loading="lazy" />
+      </div>
+    `;
   }
 
   function renderActionColumnsSkeleton() {
