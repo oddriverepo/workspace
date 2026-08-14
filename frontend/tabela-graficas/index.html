@@ -8,43 +8,42 @@
 </head>
 <body>
   <main class="suppliers-page">
-    <header class="suppliers-header">
-      <div>
-        <div class="eyebrow">Cadastro operacional</div>
-        <h1>Tabela de Gráficas</h1>
-        <p id="suppliersStatus">Sincronizando com a planilha...</p>
-      </div>
-      <div class="suppliers-actions">
-        <button type="button" class="ghost-button" id="metricsToggle">Métricas</button>
-        <button type="button" class="ghost-button" id="refreshSuppliers">Atualizar</button>
-        <button type="button" class="primary-button" id="newSupplier">Nova gráfica</button>
-      </div>
-    </header>
-
-    <section class="metrics-panel is-hidden" id="metricsPanel" aria-live="polite">
-      <div class="metric-card">
-        <span>Total de gráficas</span>
-        <strong id="metricTotal">0</strong>
-      </div>
-      <div class="metric-card">
-        <span>Praças atendidas</span>
-        <strong id="metricCities">0</strong>
-      </div>
-      <div class="metric-card">
-        <span>Ativadas</span>
-        <strong id="metricActive">0</strong>
-      </div>
-      <div class="metric-card">
-        <span>Não ativadas</span>
-        <strong id="metricInactive">0</strong>
-      </div>
-      <div class="metric-card metric-wide">
-        <span>Classificações</span>
-        <strong id="metricClassifications">-</strong>
-      </div>
-    </section>
-
     <section class="sheet-card">
+      <div class="sheet-header">
+        <div class="sheet-title">
+          <h1>Tabela de Gráficas</h1>
+          <p id="suppliersStatus">Sincronizando com a planilha...</p>
+        </div>
+        <div class="suppliers-actions">
+          <button type="button" class="ghost-button" id="metricsToggle">Métricas</button>
+          <button type="button" class="ghost-button" id="refreshSuppliers">Atualizar</button>
+          <button type="button" class="primary-button" id="newSupplier">Nova gráfica</button>
+        </div>
+      </div>
+
+      <section class="metrics-panel is-hidden" id="metricsPanel" aria-live="polite">
+        <div class="metric-card">
+          <span>Total de gráficas</span>
+          <strong id="metricTotal">0</strong>
+        </div>
+        <div class="metric-card">
+          <span>Praças atendidas</span>
+          <strong id="metricCities">0</strong>
+        </div>
+        <div class="metric-card">
+          <span>Ativadas</span>
+          <strong id="metricActive">0</strong>
+        </div>
+        <div class="metric-card">
+          <span>Não ativadas</span>
+          <strong id="metricInactive">0</strong>
+        </div>
+        <div class="metric-card metric-wide">
+          <span>Classificações</span>
+          <strong id="metricClassifications">-</strong>
+        </div>
+      </section>
+
       <div class="tabs-row">
         <button type="button" class="tab-button is-active" data-tab="suppliers">
           Gráficas <span id="suppliersCount">0</span>
